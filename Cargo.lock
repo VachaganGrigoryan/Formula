@@ -1164,6 +1164,7 @@ dependencies = [
  "cpal",
  "eframe",
  "egui",
+ "js-sys",
  "serde",
  "serde_json",
  "wasm-bindgen",

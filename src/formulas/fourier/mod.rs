@@ -30,7 +30,7 @@ struct Prepared {
 }
 
 pub struct Epicycles {
-    animals: Vec<Animal>,
+    animals: &'static [Animal],
     cache: HashMap<usize, Prepared>,
     thumbs: Vec<Option<(Rect, Vec<Span>)>>,
     current: usize,
@@ -53,7 +53,7 @@ pub struct Epicycles {
 
 impl Default for Epicycles {
     fn default() -> Self {
-        let animals = animals::load();
+        let animals = animals::all();
         let thumbs = vec![None; animals.len()];
         let start = animals
             .iter()
@@ -84,7 +84,7 @@ impl Default for Epicycles {
 
 impl Epicycles {
     fn prepared(&mut self) -> &Prepared {
-        let animals = &self.animals;
+        let animals = self.animals;
         let current = self.current;
         self.cache.entry(current).or_insert_with(|| {
             let (outline, series) = math::analyze(&animals[current].outline);

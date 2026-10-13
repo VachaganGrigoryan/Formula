@@ -1,4 +1,4 @@
-//! The list being sorted, shared by every sorting page so algorithms can be
+//! The list being sorted, shared by every sorting viewport so algorithms can be
 //! compared on exactly the same input.
 
 use std::cell::RefCell;
@@ -70,7 +70,7 @@ pub struct Dataset {
     pub dist: Distribution,
     seed: u64,
     values: Vec<u32>,
-    /// Bumped on every change so each page knows to re-record its steps.
+    /// Bumped on every change so each viewport knows to re-record its steps.
     generation: u64,
 }
 

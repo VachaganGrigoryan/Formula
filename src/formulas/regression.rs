@@ -3,7 +3,7 @@
 use egui::{Align2, FontId, Pos2, Rect, Sense, Shape, Stroke, pos2, vec2};
 
 use crate::draw;
-use crate::formula::{Formula, MathText, Palette, Tone};
+use crate::formula::{Formula, MathText, Palette, Tone, fit_text};
 use crate::rng::Rng;
 
 pub type Point = [f32; 2];
@@ -196,6 +196,11 @@ impl Formula for Regression {
         (width * 0.72).max(380.0)
     }
 
+    fn min_size(&self) -> egui::Vec2 {
+        // The chart's axis labels and the fit line under it need the width.
+        egui::vec2(440.0, self.stage_height(440.0))
+    }
+
     fn is_animating(&self) -> bool {
         false
     }
@@ -346,13 +351,9 @@ impl Formula for Regression {
             }
             None => "add points with different x to fit a line".to_owned(),
         };
-        painter.text(
-            rect.center_bottom() - vec2(0.0, 12.0),
-            Align2::CENTER_BOTTOM,
-            text,
-            mono,
-            palette.ink,
-        );
+        let galley = fit_text(painter, text, mono, rect.width() - 24.0, palette.ink);
+        let at = rect.center_bottom() - vec2(galley.size().x / 2.0, 12.0 + galley.size().y);
+        painter.galley(at, galley, palette.ink);
     }
 
     fn controls(&mut self, ui: &mut egui::Ui, _palette: &Palette) {

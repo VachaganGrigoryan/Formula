@@ -117,7 +117,7 @@ impl Formula for Easing {
     fn notes(&self) -> &'static str {
         "Bars growing into place, points sliding to new positions after a filter change, \
          panels opening, counters ticking up. Ease-out reads as \"arriving\"; ease-in \
-         (t³) reads as \"leaving\". The 1-to-N grow animation on the Drawn by circles page \
+         (t³) reads as \"leaving\". The 1-to-N grow animation in the Drawn by circles viewport \
          uses exactly this curve."
     }
 

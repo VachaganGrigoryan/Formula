@@ -1,17 +1,46 @@
-//! The app shell: a catalogue of formulas and a page for the selected one.
+//! The app shell: a CAD-style workspace. Menu bar and toolbar on top, the
+//! Browser on the left, the Inspector on the right, the command line and
+//! status bar below, and the drafting canvas in the middle.
 
-use egui::{Color32, CornerRadius, Frame, Margin, RichText, ScrollArea, Stroke};
+use egui::{Frame, Margin, Stroke};
 
-use crate::formula::{Formula, Palette};
+use crate::cad::board::{Board, ViewportModel};
+use crate::cad::camera::Camera;
+use crate::cad::canvas::{Settings, Workspace};
+use crate::cad::chrome::{self, Panels};
+use crate::cad::inspector::{Inspector, Tab};
+use crate::cad::theme::{self, Chrome};
+use crate::content::Lang;
 use crate::formulas;
 
-const PAGE_WIDTH: f32 = 720.0;
-/// Below this window width the catalogue moves to a dropdown above the page.
-const NARROW: f32 = 760.0;
+/// Storage key for the saved workspace.
+const KEY: &str = "board-v1";
+/// Below this width the side panels start hidden.
+const NARROW: f32 = 900.0;
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct Saved {
+    viewports: Vec<ViewportModel>,
+    camera: Camera,
+    settings: Settings,
+    dark: bool,
+    browser: bool,
+    inspector: bool,
+    tab: Tab,
+    lang: Lang,
+}
 
 pub struct FormulaApp {
-    formulas: Vec<Box<dyn Formula>>,
-    selected: usize,
+    ws: Workspace,
+    panels: Panels,
+    inspector: Inspector,
+    /// The theme last applied to egui's style.
+    applied: Option<bool>,
+    /// Fit the drawing on the first frame (once the canvas size is known).
+    fit_pending: bool,
+    /// A formula to show once the canvas exists (from the URL).
+    focus_pending: Option<String>,
+    started: bool,
 }
 
 impl FormulaApp {
@@ -19,195 +48,199 @@ impl FormulaApp {
         Self::with_initial(cc, None)
     }
 
-    /// Start on the formula with id `initial` if there is one (e.g. from a URL),
-    /// otherwise on the last one viewed.
+    /// Restore the last workspace, or open the demo sheet. `initial` (a tool
+    /// id, e.g. from the URL) is brought into view, placed first if needed.
     pub fn with_initial(cc: &eframe::CreationContext<'_>, initial: Option<&str>) -> Self {
-        let formulas = formulas::registry();
-        let find = |id: &str| formulas.iter().position(|f| f.id() == id);
-        let selected = initial
-            .and_then(find)
-            .or_else(|| {
-                cc.storage
-                    .and_then(|s| s.get_string("formula"))
-                    .and_then(|id| find(&id))
-            })
-            .or_else(|| find(formulas::DEFAULT_ID))
-            .unwrap_or(0);
-        Self { formulas, selected }
-    }
-
-    fn catalogue(&mut self, ui: &mut egui::Ui, palette: &Palette) {
-        ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
-            ui.add_space(12.0);
-            for (category, members) in self.categories() {
-                ui.label(
-                    RichText::new(category)
-                        .small()
-                        .strong()
-                        .color(palette.muted),
-                );
-                ui.add_space(2.0);
-                for i in members {
-                    if ui
-                        .selectable_label(i == self.selected, self.formulas[i].name())
-                        .clicked()
-                    {
-                        self.selected = i;
-                    }
+        let saved: Option<Saved> = cc.storage.and_then(|s| eframe::get_value(s, KEY));
+        let initial = initial
+            .filter(|id| formulas::tool(id).is_some())
+            .map(str::to_owned);
+        let mut app = match saved {
+            Some(s) if !s.viewports.is_empty() => {
+                let board = Board::from_model(&s.viewports);
+                let mut panels = Panels::new(s.dark);
+                panels.browser = s.browser;
+                panels.inspector = s.inspector;
+                Self {
+                    ws: Workspace::new(board, s.camera, s.settings),
+                    panels,
+                    inspector: Inspector::new(s.tab, s.lang),
+                    applied: None,
+                    fit_pending: false,
+                    focus_pending: initial.clone(),
+                    started: false,
                 }
-                ui.add_space(12.0);
             }
-            egui::widgets::global_theme_preference_buttons(ui);
-        });
+            _ => {
+                // First launch (or an old single-page version's choice).
+                let remembered = cc.storage.and_then(|s| s.get_string("formula"));
+                let focus = initial.clone().or(remembered);
+                Self {
+                    ws: Workspace::new(
+                        Board::demo(focus.as_deref()),
+                        Camera::default(),
+                        Settings::default(),
+                    ),
+                    panels: Panels::new(true),
+                    inspector: Inspector::new(Tab::Properties, Lang::Python),
+                    applied: None,
+                    fit_pending: true,
+                    focus_pending: initial,
+                    started: false,
+                }
+            }
+        };
+        app.ws
+            .say("Welcome. Pick a formula tool and click the canvas, or type help.");
+        cc.egui_ctx.options_mut(|o| o.zoom_with_keyboard = false);
+        app
     }
 
-    /// Formula indices grouped by category, in registry order.
-    fn categories(&self) -> Vec<(&'static str, Vec<usize>)> {
-        let mut groups: Vec<(&'static str, Vec<usize>)> = Vec::new();
-        for (i, f) in self.formulas.iter().enumerate() {
-            match groups.iter_mut().find(|(c, _)| *c == f.category()) {
-                Some((_, members)) => members.push(i),
-                None => groups.push((f.category(), vec![i])),
-            }
+    fn first_frame(&mut self, width: f32) {
+        if width < NARROW {
+            self.panels.browser = false;
+            self.panels.inspector = false;
         }
-        groups
-    }
-
-    fn page(&mut self, ui: &mut egui::Ui, palette: &Palette, narrow: bool) {
-        if narrow {
-            ui.horizontal(|ui| {
-                let current = self.formulas[self.selected].name();
-                egui::ComboBox::from_id_salt("formula-picker")
-                    .selected_text(current)
-                    .show_ui(ui, |ui| {
-                        for (category, members) in self.categories() {
-                            ui.label(RichText::new(category).small().color(palette.muted));
-                            for i in members {
-                                ui.selectable_value(&mut self.selected, i, self.formulas[i].name());
-                            }
-                        }
-                    });
-                egui::widgets::global_theme_preference_switch(ui);
-            });
+        if let Some(id) = self.focus_pending.take()
+            && let Some(tool) = formulas::tool(&id)
+        {
+            let uid = match self.ws.board.viewports.iter().find(|v| v.tool.id == id) {
+                Some(vp) => vp.uid,
+                None => self.ws.place(tool, None, egui::Vec2::ZERO),
+            };
+            self.ws.board.select_only(uid);
+            self.ws.focus(uid);
+            self.fit_pending = false;
         }
-
-        let formula = &mut self.formulas[self.selected];
-        ui.add_space(8.0);
-        let title_size = (ui.available_width() * 0.09).clamp(34.0, 56.0);
-        ui.label(
-            RichText::new(formula.name())
-                .size(title_size)
-                .strong()
-                .color(palette.ink),
-        );
-        ui.add_space(4.0);
-        ui.label(
-            RichText::new(formula.category())
-                .small()
-                .strong()
-                .color(palette.trace),
-        );
-        ui.add_space(2.0);
-        ui.label(RichText::new(formula.summary()).color(palette.muted));
-        ui.add_space(16.0);
-
-        let width = ui.available_width();
-        let height = formula.stage_height(width);
-        Frame::new()
-            .fill(palette.card)
-            .stroke(Stroke::new(1.0, palette.rule))
-            .corner_radius(CornerRadius::same(20))
-            .show(ui, |ui| {
-                let (response, painter) =
-                    ui.allocate_painter(egui::vec2(width - 2.0, height), formula.stage_sense());
-                formula.interact(&response, response.rect);
-                let dt = ui.input(|i| i.stable_dt).min(0.1);
-                formula.paint(
-                    &painter.with_clip_rect(response.rect),
-                    response.rect,
-                    palette,
-                    dt,
-                );
-            });
-
-        ui.add_space(14.0);
-        ui.scope(|ui| {
-            // Leave room for the label and value box beside each slider.
-            ui.spacing_mut().slider_width = (ui.available_width() - 150.0).max(120.0);
-            formula.controls(ui, palette);
-        });
-        ui.add_space(14.0);
-        for eq in formula.equations() {
-            ui.label(eq.layout(palette, 17.0));
+        if self.fit_pending {
+            self.ws.fit_all();
+            self.fit_pending = false;
         }
-        let notes = formula.notes();
-        if !notes.is_empty() {
-            ui.add_space(12.0);
-            Frame::new()
-                .stroke(Stroke::new(1.0, palette.rule))
-                .corner_radius(CornerRadius::same(12))
-                .inner_margin(Margin::same(12))
-                .show(ui, |ui| {
-                    ui.set_width(ui.available_width());
-                    ui.label(RichText::new("Where it's used").strong().color(palette.ink));
-                    ui.add_space(2.0);
-                    ui.label(RichText::new(notes).color(palette.muted));
-                });
-        }
-        ui.add_space(24.0);
-        formula.details(ui, palette);
-        ui.add_space(32.0);
     }
 }
 
 impl eframe::App for FormulaApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        let palette = Palette::for_dark_mode(ui.visuals().dark_mode);
-        let narrow = ui.available_width() < NARROW;
+        let dark = self.panels.dark;
+        if self.applied != Some(dark) {
+            theme::apply(ui.ctx(), dark);
+            self.applied = Some(dark);
+        }
+        let chrome = Chrome::for_dark(dark);
+        let palette = theme::palette(dark);
+        let width = ui.available_width();
 
-        if !narrow {
-            egui::Panel::left("catalogue")
-                .resizable(false)
-                .default_size(200.0)
+        let bar = |fill| {
+            Frame::new()
+                .fill(fill)
+                .inner_margin(Margin::symmetric(6, 3))
+        };
+        egui::Panel::top("cad-menu")
+            .frame(bar(chrome.panel))
+            .show(ui, |ui| {
+                chrome::menu_bar(ui, &mut self.ws, &mut self.panels)
+            });
+        egui::Panel::top("cad-toolbar")
+            .frame(bar(chrome.panel).stroke(Stroke::new(1.0, chrome.border)))
+            .show(ui, |ui| {
+                chrome::toolbar(ui, &mut self.ws, &mut self.panels, &chrome)
+            });
+        egui::Panel::bottom("cad-status")
+            .frame(bar(chrome.panel))
+            .show(ui, |ui| {
+                chrome::status_bar(ui, &mut self.ws, &mut self.panels, &chrome)
+            });
+        egui::Panel::bottom("cad-command")
+            .frame(
+                Frame::new()
+                    .fill(chrome.well)
+                    .stroke(Stroke::new(1.0, chrome.border)),
+            )
+            .show(ui, |ui| {
+                chrome::command_line(ui, &mut self.ws, &mut self.panels, &chrome)
+            });
+        if self.panels.browser {
+            egui::Panel::left("cad-browser")
+                .resizable(true)
+                .default_size(232.0)
+                .size_range(180.0..=380.0)
                 .frame(
                     Frame::new()
-                        .fill(palette.card)
-                        .inner_margin(Margin::symmetric(12, 8)),
+                        .fill(chrome.panel)
+                        .stroke(Stroke::new(1.0, chrome.border)),
                 )
-                .show(ui, |ui| self.catalogue(ui, &palette));
-        }
-
-        egui::CentralPanel::default()
-            .frame(Frame::new().fill(palette.paper))
-            .show(ui, |ui| {
-                ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
-                    let gutter = 16.0;
-                    let width = (ui.available_width() - 2.0 * gutter).min(PAGE_WIDTH);
-                    let side = (ui.available_width() - width) / 2.0;
-                    ui.horizontal_top(|ui| {
-                        ui.add_space(side);
-                        ui.vertical(|ui| {
-                            ui.set_width(width);
-                            ui.add_space(12.0);
-                            self.page(ui, &palette, narrow);
-                        });
-                    });
+                .show(ui, |ui| {
+                    chrome::browser(ui, &mut self.ws, &mut self.panels, &chrome)
                 });
+        }
+        if self.panels.inspector {
+            // The library's hovered/picked tool is what the inspector shows
+            // when nothing is selected.
+            self.inspector.tool = self.panels.picked;
+            // Maximized, the panel has its own id so the normal width is kept.
+            let panel = if self.inspector.maximized {
+                egui::Panel::right("cad-inspector-max")
+                    .resizable(false)
+                    .exact_size((width * 0.62).max(380.0))
+            } else {
+                egui::Panel::right("cad-inspector")
+                    .resizable(true)
+                    .default_size(380.0)
+                    .size_range(300.0..=760.0)
+            };
+            panel
+                .frame(
+                    Frame::new()
+                        .fill(chrome.panel)
+                        .stroke(Stroke::new(1.0, chrome.border)),
+                )
+                .show(ui, |ui| {
+                    self.inspector.show(ui, &mut self.ws, &chrome, &palette)
+                });
+        } else if self.ws.request.is_some() {
+            self.panels.inspector = true;
+        }
+        egui::CentralPanel::default()
+            .frame(Frame::new().fill(chrome.canvas))
+            .show(ui, |ui| {
+                if !self.started {
+                    self.started = true;
+                    self.ws.view = ui.max_rect();
+                    self.first_frame(width);
+                }
+                self.ws.show(ui, &chrome, &palette);
             });
+        chrome::help_window(ui.ctx(), &mut self.panels, &chrome);
 
         #[cfg(target_arch = "wasm32")]
-        crate::web::show_in_url(self.formulas[self.selected].id());
-
-        if self.formulas[self.selected].is_animating() {
-            ui.ctx().request_repaint();
+        {
+            let id = self
+                .ws
+                .board
+                .primary()
+                .and_then(|uid| self.ws.board.get(uid))
+                .map(|vp| vp.tool.id);
+            crate::web::show_in_url(id.unwrap_or(""));
         }
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        storage.set_string("formula", self.formulas[self.selected].id().to_owned());
+        let saved = Saved {
+            viewports: self.ws.board.to_model(),
+            camera: self.ws.camera,
+            settings: self.ws.settings,
+            dark: self.panels.dark,
+            browser: self.panels.browser,
+            inspector: self.panels.inspector,
+            tab: self.inspector.tab,
+            lang: self.inspector.lang,
+        };
+        eframe::set_value(storage, KEY, &saved);
     }
 
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
-        Color32::TRANSPARENT.to_normalized_gamma_f32()
+        Chrome::for_dark(self.panels.dark)
+            .canvas
+            .to_normalized_gamma_f32()
     }
 }

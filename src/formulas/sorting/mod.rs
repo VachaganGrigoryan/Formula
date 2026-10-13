@@ -1,7 +1,7 @@
 //! Sorting algorithms, visualized by replaying every step they take.
 //!
-//! All sorting pages share one [`data::Dataset`], so a shuffle on one page
-//! shows up on every other and algorithms can be compared on the same input.
+//! All sorting viewports share one [`data::Dataset`], so a shuffle in one
+//! shows up in every other and algorithms can be compared on the same input.
 
 pub mod algorithms;
 pub mod data;
@@ -14,17 +14,17 @@ use std::rc::Rc;
 use egui::{Align2, Color32, FontId, Pos2, Rect, Stroke, pos2, vec2};
 
 use crate::audio::{self, Audio};
-use crate::formula::{Formula, MathText, Palette, Tone};
+use crate::formula::{Formula, MathText, Palette, Tone, fit_text};
 use algorithms::{Algorithm, Op, State};
 use data::{Distribution, Shared};
 use skin::{Mark, Skin};
 
-/// View settings shared by every sorting page.
+/// View settings shared by every sorting viewport.
 pub struct View {
     pub skin: Skin,
 }
 
-/// Everything the sorting pages share: the list, how it is drawn, and the
+/// Everything the sorting viewports share: the list, how it is drawn, and the
 /// one audio output.
 #[derive(Clone)]
 pub struct Session {
@@ -73,7 +73,7 @@ impl Session {
                 data.shuffle();
             }
             ui.label(
-                egui::RichText::new("shared by every sorting page")
+                egui::RichText::new("shared by every sorting viewport")
                     .small()
                     .color(palette.muted),
             );
@@ -257,7 +257,7 @@ fn info(alg: Algorithm) -> Info {
                     input. The basis of external sorting (data larger than memory) and of Timsort.",
             time: "O(n log n) in every case",
             space: "O(n)",
-            code: "def merge_sort(arr):\n    if len(arr) > 1:\n        mid = len(arr) // 2\n        L = arr[:mid]\n        R = arr[mid:]\n        merge_sort(L)\n        merge_sort(R)\n        i = j = k = 0\n        while i < len(L) and j < len(R):\n            if L[i] < R[j]:\n                arr[k] = L[i]; i += 1\n            else:\n                arr[k] = R[j]; j += 1\n            k += 1\n        while i < len(L):\n            arr[k] = L[i]; i += 1; k += 1\n        while j < len(R):\n            arr[k] = R[j]; j += 1; k += 1\n    return arr",
+            code: "def merge_sort(arr):\n    if len(arr) > 1:\n        mid = len(arr) // 2\n        L = arr[:mid]\n        R = arr[mid:]\n        merge_sort(L)\n        merge_sort(R)\n        i = j = k = 0\n        while i < len(L) and j < len(R):\n            if L[i] <= R[j]:\n                arr[k] = L[i]; i += 1\n            else:\n                arr[k] = R[j]; j += 1\n            k += 1\n        while i < len(L):\n            arr[k] = L[i]; i += 1; k += 1\n        while j < len(R):\n            arr[k] = R[j]; j += 1; k += 1\n    return arr",
         },
         Algorithm::Quick => Info {
             id: "quick-sort",
@@ -563,6 +563,11 @@ impl Formula for SortVisualizer {
         }
     }
 
+    fn min_size(&self) -> egui::Vec2 {
+        // The step / comparisons / swaps / writes line needs the width.
+        egui::vec2(480.0, self.stage_height(480.0))
+    }
+
     fn paint(&mut self, painter: &egui::Painter, rect: Rect, palette: &Palette, dt: f32) {
         self.sync();
         self.tone_cooldown -= dt;
@@ -598,27 +603,19 @@ impl Formula for SortVisualizer {
         let n = self.initial.len();
         let max = self.initial.iter().copied().max().unwrap_or(1);
         let inner = rect.shrink2(vec2(18.0, 14.0));
-        let mono = FontId::monospace(12.5);
         let s = &self.state;
 
-        let mut status = format!(
-            "step {} / {}    comparisons {}    swaps {}    writes {}",
-            self.cursor,
-            self.ops.len(),
-            s.comparisons,
-            s.swaps,
-            s.writes
-        );
+        let mut fields = vec![
+            format!("step {} / {}", self.cursor, self.ops.len()),
+            format!("comparisons {}", s.comparisons),
+            format!("swaps {}", s.swaps),
+            format!("writes {}", s.writes),
+        ];
         if !s.stack.is_empty() {
-            status.push_str(&format!("    recursion depth {}", s.stack.len()));
+            fields.push(format!("recursion depth {}", s.stack.len()));
         }
-        painter.text(
-            inner.left_top(),
-            Align2::LEFT_TOP,
-            status,
-            mono.clone(),
-            palette.ink,
-        );
+        let status = fit_line(painter, &fields, inner.width(), 12.5, palette.ink);
+        painter.galley(inner.left_top(), status, palette.ink);
 
         let extra = match self.alg {
             Algorithm::Counting => 190.0,
@@ -726,38 +723,39 @@ impl Formula for SortVisualizer {
         }
     }
 
+    /// Space plays or pauses; the arrow keys step back and forward.
+    fn handle_keys(&mut self, ctx: &egui::Context) {
+        let none = egui::Modifiers::NONE;
+        let (space, left, right) = ctx.input_mut(|i| {
+            (
+                i.consume_key(none, egui::Key::Space),
+                i.consume_key(none, egui::Key::ArrowLeft),
+                i.consume_key(none, egui::Key::ArrowRight),
+            )
+        });
+        if space {
+            if self.done() {
+                self.seek(0);
+                self.playing = true;
+            } else {
+                self.playing = !self.playing;
+            }
+        }
+        if left && self.cursor > 0 {
+            self.playing = false;
+            self.seek(self.cursor - 1);
+        }
+        if right && !self.done() {
+            self.playing = false;
+            self.seek(self.cursor + 1);
+        }
+    }
+
     fn controls(&mut self, ui: &mut egui::Ui, palette: &Palette) {
         self.session.data_controls(ui, palette);
         self.sync();
         ui.add_space(10.0);
         self.session.view_controls(ui, palette);
-
-        // Space plays or pauses; the arrow keys step, while no text field has focus.
-        if ui.ctx().memory(|m| m.focused().is_none()) {
-            let (space, left, right) = ui.input(|i| {
-                (
-                    i.key_pressed(egui::Key::Space),
-                    i.key_pressed(egui::Key::ArrowLeft),
-                    i.key_pressed(egui::Key::ArrowRight),
-                )
-            });
-            if space {
-                if self.done() {
-                    self.seek(0);
-                    self.playing = true;
-                } else {
-                    self.playing = !self.playing;
-                }
-            }
-            if left && self.cursor > 0 {
-                self.playing = false;
-                self.seek(self.cursor - 1);
-            }
-            if right && !self.done() {
-                self.playing = false;
-                self.seek(self.cursor + 1);
-            }
-        }
 
         // The player.
         ui.add_space(10.0);
@@ -1001,15 +999,28 @@ impl SortVisualizer {
     }
 }
 
-/// One page per algorithm, all sharing a single dataset.
-pub fn pages() -> Vec<Box<dyn Formula>> {
-    let session = Session::new();
-    let mut pages: Vec<Box<dyn Formula>> = Algorithm::ALL
-        .into_iter()
-        .map(|alg| Box::new(SortVisualizer::new(alg, session.clone())) as Box<dyn Formula>)
-        .collect();
-    pages.push(Box::new(race::Race::new(session)));
-    pages
+/// Lay out `fields` on one line no wider than `width`: first by tightening
+/// the gaps between them, then by shrinking the font.
+fn fit_line(
+    painter: &egui::Painter,
+    fields: &[String],
+    width: f32,
+    size: f32,
+    color: Color32,
+) -> std::sync::Arc<egui::Galley> {
+    for gap in ["    ", "   "] {
+        let galley = painter.layout_no_wrap(fields.join(gap), FontId::monospace(size), color);
+        if galley.size().x <= width {
+            return galley;
+        }
+    }
+    fit_text(
+        painter,
+        fields.join("  "),
+        FontId::monospace(size),
+        width,
+        color,
+    )
 }
 
 #[cfg(test)]
@@ -1017,7 +1028,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn pages_share_data_and_resync() {
+    fn viewports_share_data_and_resync() {
         let session = Session::new();
         let data = session.data.clone();
         let mut bubble = SortVisualizer::new(Algorithm::Bubble, session.clone());

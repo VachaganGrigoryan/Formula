@@ -3,15 +3,25 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Formula</title>
+<title>Formula Workbench</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #E7ECE6; }
-  @media (prefers-color-scheme: dark) { html, body { background: #0F1714; } }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #1A1E23; }
   #formula_canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 </style>
 </head>
 <body>
 <canvas id="formula_canvas"></canvas>
+<script>
+  // The workspace uses Ctrl+D (duplicate), Ctrl+0 / Ctrl+= / Ctrl+- (zoom) and
+  // Ctrl+A; keep the browser from bookmarking, page-zooming or selecting the page.
+  window.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && ["d", "0", "=", "+", "-", "a"].includes(e.key.toLowerCase())) {
+      e.preventDefault();
+    }
+  }, { capture: true });
+  // Ctrl+wheel would zoom the page instead of the canvas.
+  window.addEventListener("wheel", (e) => { if (e.ctrlKey) e.preventDefault(); }, { passive: false });
+</script>
 <script type="module">
   import init from "./pkg/formula.js";
   init();

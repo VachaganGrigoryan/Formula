@@ -5,7 +5,7 @@ fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("Formula")
-            .with_inner_size([1040.0, 900.0])
+            .with_inner_size([1440.0, 900.0])
             .with_min_inner_size([360.0, 480.0]),
         ..Default::default()
     };

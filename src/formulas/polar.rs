@@ -112,6 +112,11 @@ impl Formula for Polar {
         self.playing = false;
     }
 
+    fn min_size(&self) -> egui::Vec2 {
+        // The readout sits below the plot; narrower and it runs into the 270° label.
+        egui::vec2(420.0, self.stage_height(420.0))
+    }
+
     fn paint(&mut self, painter: &egui::Painter, rect: Rect, palette: &Palette, dt: f32) {
         if self.playing {
             self.theta = (self.theta + 0.15 * self.speed as f32 * dt).rem_euclid(TAU);

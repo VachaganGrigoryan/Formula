@@ -256,12 +256,23 @@ impl Formula for Mandelbrot {
                 self.zoom_at(rect, at, 0.5);
             }
         }
-        if let Some(at) = self.hover {
-            let zoom = response.ctx.input(|i| i.zoom_delta());
+        // Wheel and pinch zoom, only while this is the active viewport (an
+        // inactive one is handed a hover-only response).
+        if let Some(at) = self.hover
+            && response.sense.senses_click()
+        {
+            let (pinch, wheel) = response
+                .ctx
+                .input(|i| (i.zoom_delta(), i.smooth_scroll_delta.y));
+            let zoom = pinch as f64 * (wheel as f64 * 0.003).exp();
             if zoom != 1.0 {
-                self.zoom_at(rect, at, zoom as f64);
+                self.zoom_at(rect, at, zoom);
             }
         }
+    }
+
+    fn wants_scroll(&self) -> bool {
+        true
     }
 
     fn paint(&mut self, painter: &egui::Painter, rect: Rect, palette: &Palette, _dt: f32) {

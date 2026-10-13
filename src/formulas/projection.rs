@@ -72,7 +72,7 @@ impl Default for Projection {
             focal: 1.0,
             distance: 4.0,
             yaw: 0.6,
-            pitch: 0.35,
+            pitch: -0.35,
             spinning: true,
             scatter,
         }
@@ -136,6 +136,11 @@ impl Formula for Projection {
             self.pitch = (self.pitch + d.y * 0.01).clamp(-1.4, 1.4);
             self.spinning = false;
         }
+    }
+
+    fn min_size(&self) -> egui::Vec2 {
+        // Below this the "seen from above" inset covers the scene.
+        egui::vec2(480.0, self.stage_height(480.0))
     }
 
     fn paint(&mut self, painter: &egui::Painter, rect: Rect, palette: &Palette, dt: f32) {

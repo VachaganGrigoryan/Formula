@@ -286,7 +286,7 @@ fn merge_sort(r: &mut Recorder, lo: usize, hi: usize) {
     while i < left.len() && j < right.len() {
         // Compare the two heads, at the positions they started from.
         r.push(Op::Compare(lo + i, mid + j));
-        if left[i] < right[j] {
+        if left[i] <= right[j] {
             r.write(k, left[i]);
             i += 1;
         } else {

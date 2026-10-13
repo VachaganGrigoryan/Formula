@@ -28,6 +28,12 @@ pub const GROUPS: [&str; 5] = ["All", "Mammals", "Birds", "Sea life", "Bugs and 
 
 const DATA: &str = include_str!("../../../assets/animals.json");
 
+/// The bundled animals, parsed once and shared by every instance.
+pub fn all() -> &'static [Animal] {
+    static ANIMALS: std::sync::OnceLock<Vec<Animal>> = std::sync::OnceLock::new();
+    ANIMALS.get_or_init(load)
+}
+
 pub fn load() -> Vec<Animal> {
     let raw: Vec<RawAnimal> = serde_json::from_str(DATA).expect("bundled animals.json is valid");
     raw.into_iter()

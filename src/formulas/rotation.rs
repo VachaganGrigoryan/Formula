@@ -135,6 +135,11 @@ impl Formula for Rotation {
         (width * 0.6).max(300.0) + CHART_H
     }
 
+    fn min_size(&self) -> egui::Vec2 {
+        // Room for the readout beside the circle.
+        egui::vec2(480.0, self.stage_height(480.0))
+    }
+
     fn interact(&mut self, response: &egui::Response, rect: Rect) {
         let (center, scale) = plane(rect);
         let to_screen = |[x, y]: Point| pos2(center.x + x * scale, center.y - y * scale);
