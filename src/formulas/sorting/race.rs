@@ -165,6 +165,11 @@ impl Formula for Race {
         ]
     }
 
+    fn min_size(&self) -> egui::Vec2 {
+        // The label column and the metric bars need the width.
+        egui::vec2(480.0, self.stage_height(480.0))
+    }
+
     fn stage_height(&self, _width: f32) -> f32 {
         HEADER_H + LANE_H * self.chosen.len().max(1) as f32 + 12.0
     }

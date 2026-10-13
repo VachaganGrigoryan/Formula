@@ -73,7 +73,7 @@ impl Session {
                 data.shuffle();
             }
             ui.label(
-                egui::RichText::new("shared by every sorting page")
+                egui::RichText::new("shared by every sorting viewport")
                     .small()
                     .color(palette.muted),
             );
@@ -257,7 +257,7 @@ fn info(alg: Algorithm) -> Info {
                     input. The basis of external sorting (data larger than memory) and of Timsort.",
             time: "O(n log n) in every case",
             space: "O(n)",
-            code: "def merge_sort(arr):\n    if len(arr) > 1:\n        mid = len(arr) // 2\n        L = arr[:mid]\n        R = arr[mid:]\n        merge_sort(L)\n        merge_sort(R)\n        i = j = k = 0\n        while i < len(L) and j < len(R):\n            if L[i] < R[j]:\n                arr[k] = L[i]; i += 1\n            else:\n                arr[k] = R[j]; j += 1\n            k += 1\n        while i < len(L):\n            arr[k] = L[i]; i += 1; k += 1\n        while j < len(R):\n            arr[k] = R[j]; j += 1; k += 1\n    return arr",
+            code: "def merge_sort(arr):\n    if len(arr) > 1:\n        mid = len(arr) // 2\n        L = arr[:mid]\n        R = arr[mid:]\n        merge_sort(L)\n        merge_sort(R)\n        i = j = k = 0\n        while i < len(L) and j < len(R):\n            if L[i] <= R[j]:\n                arr[k] = L[i]; i += 1\n            else:\n                arr[k] = R[j]; j += 1\n            k += 1\n        while i < len(L):\n            arr[k] = L[i]; i += 1; k += 1\n        while j < len(R):\n            arr[k] = R[j]; j += 1; k += 1\n    return arr",
         },
         Algorithm::Quick => Info {
             id: "quick-sort",
@@ -726,38 +726,39 @@ impl Formula for SortVisualizer {
         }
     }
 
+    /// Space plays or pauses; the arrow keys step back and forward.
+    fn handle_keys(&mut self, ctx: &egui::Context) {
+        let none = egui::Modifiers::NONE;
+        let (space, left, right) = ctx.input_mut(|i| {
+            (
+                i.consume_key(none, egui::Key::Space),
+                i.consume_key(none, egui::Key::ArrowLeft),
+                i.consume_key(none, egui::Key::ArrowRight),
+            )
+        });
+        if space {
+            if self.done() {
+                self.seek(0);
+                self.playing = true;
+            } else {
+                self.playing = !self.playing;
+            }
+        }
+        if left && self.cursor > 0 {
+            self.playing = false;
+            self.seek(self.cursor - 1);
+        }
+        if right && !self.done() {
+            self.playing = false;
+            self.seek(self.cursor + 1);
+        }
+    }
+
     fn controls(&mut self, ui: &mut egui::Ui, palette: &Palette) {
         self.session.data_controls(ui, palette);
         self.sync();
         ui.add_space(10.0);
         self.session.view_controls(ui, palette);
-
-        // Space plays or pauses; the arrow keys step, while no text field has focus.
-        if ui.ctx().memory(|m| m.focused().is_none()) {
-            let (space, left, right) = ui.input(|i| {
-                (
-                    i.key_pressed(egui::Key::Space),
-                    i.key_pressed(egui::Key::ArrowLeft),
-                    i.key_pressed(egui::Key::ArrowRight),
-                )
-            });
-            if space {
-                if self.done() {
-                    self.seek(0);
-                    self.playing = true;
-                } else {
-                    self.playing = !self.playing;
-                }
-            }
-            if left && self.cursor > 0 {
-                self.playing = false;
-                self.seek(self.cursor - 1);
-            }
-            if right && !self.done() {
-                self.playing = false;
-                self.seek(self.cursor + 1);
-            }
-        }
 
         // The player.
         ui.add_space(10.0);

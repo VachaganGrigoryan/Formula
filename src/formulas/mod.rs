@@ -41,36 +41,277 @@ pub const SORTING: &str = "Sorting";
 /// Shown on first launch, before a choice has been remembered.
 pub const DEFAULT_ID: &str = "fourier-epicycles";
 
-/// The catalogue, in the order shown in the sidebar.
+/// What a new formula instance may share with the others on the same board.
+pub struct ToolEnv {
+    /// One sorting session per board, so every sorting viewport works on the
+    /// same list and shares one audio output.
+    pub sorting: sorting::Session,
+}
+
+impl ToolEnv {
+    pub fn new() -> Self {
+        Self {
+            sorting: sorting::Session::new(),
+        }
+    }
+}
+
+impl Default for ToolEnv {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// A formula as a workspace tool: its catalogue entry and how to make a fresh
+/// instance of it.
+pub struct Tool {
+    pub id: &'static str,
+    pub name: &'static str,
+    pub category: &'static str,
+    /// Short command alias, typed into the command line like a CAD command.
+    pub alias: &'static str,
+    pub make: fn(&ToolEnv) -> Box<dyn Formula>,
+}
+
+impl PartialEq for Tool {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+fn new<T: Formula + Default + 'static>(_: &ToolEnv) -> Box<dyn Formula> {
+    Box::new(T::default())
+}
+
+fn sort<const A: usize>(env: &ToolEnv) -> Box<dyn Formula> {
+    let alg = sorting::algorithms::Algorithm::ALL[A];
+    Box::new(sorting::SortVisualizer::new(alg, env.sorting.clone()))
+}
+
+fn race(env: &ToolEnv) -> Box<dyn Formula> {
+    Box::new(sorting::race::Race::new(env.sorting.clone()))
+}
+
+macro_rules! tool {
+    ($id:literal, $name:literal, $cat:ident, $alias:literal, $make:expr) => {
+        Tool {
+            id: $id,
+            name: $name,
+            category: $cat,
+            alias: $alias,
+            make: $make,
+        }
+    };
+}
+
+/// The catalogue, in the order shown in the tool library.
+pub static TOOLS: &[Tool] = &[
+    tool!(
+        "polar-to-cartesian",
+        "Polar to Cartesian",
+        COORDINATES,
+        "POL",
+        new::<polar::Polar>
+    ),
+    tool!(
+        "perspective-projection",
+        "Perspective projection",
+        COORDINATES,
+        "PRJ",
+        new::<projection::Projection>
+    ),
+    tool!(
+        "lerp",
+        "Linear interpolation",
+        CURVES,
+        "LRP",
+        new::<lerp::Lerp>
+    ),
+    tool!(
+        "cubic-bezier",
+        "Cubic Bézier curve",
+        CURVES,
+        "BEZ",
+        new::<bezier::Bezier>
+    ),
+    tool!(
+        "fourier-epicycles",
+        "Drawn by circles",
+        CURVES,
+        "FOU",
+        new::<fourier::Epicycles>
+    ),
+    tool!(
+        "lissajous",
+        "Lissajous figures",
+        CURVES,
+        "LIS",
+        new::<lissajous::Lissajous>
+    ),
+    tool!(
+        "force-layout",
+        "Springs and repulsion",
+        PHYSICS,
+        "FRC",
+        new::<force::ForceLayout>
+    ),
+    tool!(
+        "min-max-normalization",
+        "Min-max normalization",
+        SCALING,
+        "NRM",
+        new::<normalize::Normalize>
+    ),
+    tool!(
+        "mandelbrot",
+        "Mandelbrot set",
+        FRACTALS,
+        "MAN",
+        new::<mandelbrot::Mandelbrot>
+    ),
+    tool!(
+        "flow-field",
+        "Perlin noise flow field",
+        FRACTALS,
+        "FLW",
+        new::<flowfield::FlowField>
+    ),
+    tool!(
+        "game-of-life",
+        "Conway's Game of Life",
+        FRACTALS,
+        "LIF",
+        new::<life::Life>
+    ),
+    tool!(
+        "lorenz",
+        "Lorenz attractor",
+        CHAOS,
+        "LOR",
+        new::<lorenz::Lorenz>
+    ),
+    tool!(
+        "euclidean-distance",
+        "Euclidean distance",
+        GEOMETRY,
+        "DST",
+        new::<distance::Distance>
+    ),
+    tool!(
+        "rotation-matrix",
+        "2D rotation",
+        GEOMETRY,
+        "ROT",
+        new::<rotation::Rotation>
+    ),
+    tool!(
+        "voronoi",
+        "Voronoi diagram",
+        GEOMETRY,
+        "VOR",
+        new::<voronoi::Voronoi>
+    ),
+    tool!(
+        "linear-regression",
+        "Line of best fit",
+        STATISTICS,
+        "REG",
+        new::<regression::Regression>
+    ),
+    tool!(
+        "ease-out-cubic",
+        "Cubic ease-out",
+        ANIMATION,
+        "EAS",
+        new::<easing::Easing>
+    ),
+    tool!(
+        "relative-luminance",
+        "Relative luminance",
+        COLOR,
+        "LUM",
+        new::<luminance::Luminance>
+    ),
+    tool!("bubble-sort", "Bubble sort", SORTING, "BUB", sort::<0>),
+    tool!(
+        "selection-sort",
+        "Selection sort",
+        SORTING,
+        "SEL",
+        sort::<1>
+    ),
+    tool!(
+        "insertion-sort",
+        "Insertion sort",
+        SORTING,
+        "INS",
+        sort::<2>
+    ),
+    tool!("merge-sort", "Merge sort", SORTING, "MRG", sort::<3>),
+    tool!("quick-sort", "Quick sort", SORTING, "QCK", sort::<4>),
+    tool!(
+        "quick-sort-3way",
+        "Quick sort (3-way)",
+        SORTING,
+        "Q3W",
+        sort::<5>
+    ),
+    tool!("heap-sort", "Heap sort", SORTING, "HEP", sort::<6>),
+    tool!("counting-sort", "Counting sort", SORTING, "CNT", sort::<7>),
+    tool!("sorting-race", "Sorting race", SORTING, "RCE", race),
+];
+
+/// The tool with this id.
+pub fn tool(id: &str) -> Option<&'static Tool> {
+    TOOLS.iter().find(|t| t.id == id)
+}
+
+/// The tool whose id, alias or name matches what was typed (case-insensitive).
+pub fn find_tool(query: &str) -> Option<&'static Tool> {
+    let q = query.trim().to_lowercase();
+    TOOLS
+        .iter()
+        .find(|t| t.alias.to_lowercase() == q || t.id == q || t.name.to_lowercase() == q)
+}
+
+/// Category names in catalogue order, each with its tools.
+pub fn categories() -> Vec<(&'static str, Vec<&'static Tool>)> {
+    let mut groups: Vec<(&'static str, Vec<&'static Tool>)> = Vec::new();
+    for t in TOOLS {
+        match groups.iter_mut().find(|(c, _)| *c == t.category) {
+            Some((_, members)) => members.push(t),
+            None => groups.push((t.category, vec![t])),
+        }
+    }
+    groups
+}
+
+/// One instance of every tool, sharing one environment.
 pub fn registry() -> Vec<Box<dyn Formula>> {
-    let mut all: Vec<Box<dyn Formula>> = vec![
-        Box::new(polar::Polar::default()),
-        Box::new(projection::Projection::default()),
-        Box::new(lerp::Lerp::default()),
-        Box::new(bezier::Bezier::default()),
-        Box::new(fourier::Epicycles::default()),
-        Box::new(lissajous::Lissajous::default()),
-        Box::new(force::ForceLayout::default()),
-        Box::new(normalize::Normalize::default()),
-        Box::new(mandelbrot::Mandelbrot::default()),
-        Box::new(flowfield::FlowField::default()),
-        Box::new(life::Life::default()),
-        Box::new(lorenz::Lorenz::default()),
-        Box::new(distance::Distance::default()),
-        Box::new(rotation::Rotation::default()),
-        Box::new(voronoi::Voronoi::default()),
-        Box::new(regression::Regression::default()),
-        Box::new(easing::Easing::default()),
-        Box::new(luminance::Luminance::default()),
-    ];
-    // One page per algorithm, sharing a single dataset.
-    all.extend(sorting::pages());
-    all
+    let env = ToolEnv::new();
+    TOOLS.iter().map(|t| (t.make)(&env)).collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tools_match_their_formulas() {
+        let env = ToolEnv::new();
+        for t in TOOLS {
+            let f = (t.make)(&env);
+            assert_eq!(f.id(), t.id);
+            assert_eq!(f.name(), t.name, "{}", t.id);
+            assert_eq!(f.category(), t.category, "{}", t.id);
+            assert_eq!(tool(t.id).map(|x| x.id), Some(t.id));
+            assert_eq!(find_tool(&t.alias.to_lowercase()).map(|x| x.id), Some(t.id));
+        }
+        let mut aliases: Vec<_> = TOOLS.iter().map(|t| t.alias).collect();
+        aliases.sort();
+        aliases.dedup();
+        assert_eq!(aliases.len(), TOOLS.len());
+    }
 
     #[test]
     fn ids_are_unique() {
@@ -109,6 +350,8 @@ mod tests {
             for eq in f.equations() {
                 text.push_str(&eq.text());
             }
+            // The reference docs are drawn in the same font.
+            text.push_str(crate::content::doc(f.id()).unwrap_or(""));
             let missing: String = ctx.fonts_mut(|fonts| {
                 text.chars()
                     .filter(|&c| !c.is_whitespace() && !fonts.has_glyph(&font, c))

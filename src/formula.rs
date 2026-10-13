@@ -211,4 +211,22 @@ pub trait Formula {
     fn is_animating(&self) -> bool {
         true
     }
+
+    /// The smallest stage the formula lays out correctly in. The workspace
+    /// will not let a viewport be resized below this. By default: 240 wide,
+    /// and as tall as [`Formula::stage_height`] asks for at that width.
+    fn min_size(&self) -> egui::Vec2 {
+        egui::vec2(240.0, self.stage_height(240.0))
+    }
+
+    /// Keyboard shortcuts of the formula itself. Called once per frame, only
+    /// for the selected viewport, before the workspace's own shortcuts, and
+    /// never while a text field has keyboard focus. Consume the keys you use.
+    fn handle_keys(&mut self, _ctx: &egui::Context) {}
+
+    /// Whether the formula uses the mouse wheel and pinch itself while it is
+    /// the active viewport (the workspace then leaves them alone over it).
+    fn wants_scroll(&self) -> bool {
+        false
+    }
 }
