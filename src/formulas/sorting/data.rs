@@ -45,10 +45,12 @@ pub fn generate(n: usize, dist: Distribution, seed: u64) -> Vec<u32> {
     match dist {
         Distribution::Random => shuffle(&mut v, &mut rng),
         Distribution::NearlySorted => {
-            for _ in 0..(n / 10).max(1) {
-                if n > 1 {
-                    let i = rng.index(n - 1);
-                    v.swap(i, i + 1);
+            // Sorted, except for two or three values swapped out of place.
+            if n >= 4 {
+                for _ in 0..2 + rng.index(2) {
+                    let i = rng.index(n);
+                    let j = (i + 2 + rng.index(n - 3)) % n;
+                    v.swap(i, j);
                 }
             }
         }
@@ -139,7 +141,7 @@ mod tests {
             .enumerate()
             .filter(|&(i, &x)| x != i as u32 + 1)
             .count();
-        assert!(out_of_place > 0 && out_of_place <= 20);
+        assert!((2..=6).contains(&out_of_place), "{out_of_place} misplaced");
         let few = generate(40, Distribution::FewUnique, 2);
         let mut distinct = few.clone();
         distinct.sort();

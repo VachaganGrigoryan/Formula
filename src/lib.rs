@@ -4,6 +4,7 @@
 //! [`app::FormulaApp`] lists them and renders the selected one.
 
 pub mod app;
+pub mod audio;
 pub mod draw;
 pub mod formula;
 pub mod formulas;

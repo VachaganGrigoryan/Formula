@@ -62,6 +62,8 @@ pub enum Op {
 pub struct Recorder {
     pub a: Vec<u32>,
     pub ops: Vec<Op>,
+    /// When false, operations are carried out but not logged (for timing).
+    recording: bool,
 }
 
 impl Recorder {
@@ -69,11 +71,22 @@ impl Recorder {
         Self {
             a: a.to_vec(),
             ops: Vec::new(),
+            recording: true,
+        }
+    }
+
+    /// A recorder that sorts without keeping a log.
+    pub fn silent(a: &[u32]) -> Self {
+        Self {
+            recording: false,
+            ..Self::new(a)
         }
     }
 
     fn push(&mut self, op: Op) {
-        self.ops.push(op);
+        if self.recording {
+            self.ops.push(op);
+        }
     }
 
     /// `a[i] > a[j]`, recorded as a comparison.
@@ -110,17 +123,19 @@ pub enum Algorithm {
     Insertion,
     Merge,
     Quick,
+    Quick3,
     Heap,
     Counting,
 }
 
 impl Algorithm {
-    pub const ALL: [Algorithm; 7] = [
+    pub const ALL: [Algorithm; 8] = [
         Algorithm::Bubble,
         Algorithm::Selection,
         Algorithm::Insertion,
         Algorithm::Merge,
         Algorithm::Quick,
+        Algorithm::Quick3,
         Algorithm::Heap,
         Algorithm::Counting,
     ];
@@ -128,26 +143,51 @@ impl Algorithm {
     /// Sort a copy of `data`, returning the recorded steps and the sorted result.
     pub fn record(self, data: &[u32]) -> Recorder {
         let mut r = Recorder::new(data);
+        self.run(&mut r);
+        r
+    }
+
+    /// Average wall-clock microseconds to sort `data`, without recording.
+    /// Repeats short sorts so the measurement is not just timer noise.
+    pub fn time_us(self, data: &[u32]) -> f64 {
+        let start = web_time::Instant::now();
+        let mut runs = 0u32;
+        while runs < 3 || (start.elapsed().as_secs_f64() < 0.004 && runs < 500) {
+            let mut r = Recorder::silent(data);
+            self.run(&mut r);
+            std::hint::black_box(&r.a);
+            runs += 1;
+        }
+        start.elapsed().as_secs_f64() * 1e6 / runs as f64
+    }
+
+    fn run(self, r: &mut Recorder) {
+        let r = &mut *r;
         match self {
-            Algorithm::Bubble => bubble(&mut r),
-            Algorithm::Selection => selection(&mut r),
-            Algorithm::Insertion => insertion(&mut r),
+            Algorithm::Bubble => bubble(r),
+            Algorithm::Selection => selection(r),
+            Algorithm::Insertion => insertion(r),
             Algorithm::Merge => {
                 let n = r.a.len();
-                merge_sort(&mut r, 0, n);
+                merge_sort(r, 0, n);
                 r.push(Op::ClearRange);
             }
             Algorithm::Quick => {
                 let n = r.a.len();
                 if n > 0 {
-                    quick_sort(&mut r, 0, n as isize - 1);
+                    quick_sort(r, 0, n as isize - 1);
                 }
                 r.push(Op::ClearRange);
             }
-            Algorithm::Heap => heap_sort(&mut r),
-            Algorithm::Counting => counting(&mut r),
+            Algorithm::Quick3 => {
+                let n = r.a.len();
+                if n > 0 {
+                    quick_sort_3way(r, 0, n - 1);
+                }
+            }
+            Algorithm::Heap => heap_sort(r),
+            Algorithm::Counting => counting(r),
         }
-        r
     }
 }
 
@@ -303,6 +343,52 @@ fn partition(r: &mut Recorder, low: usize, high: usize) -> usize {
     }
     r.push(Op::Pivot(None));
     i
+}
+
+/// Sort `lo..=hi` with Dijkstra's three-way partition: values below the pivot
+/// go left, above go right, and every copy of the pivot value lands in the
+/// middle at once. On lists with many duplicates that middle band is big, so
+/// far less work is left for the recursive calls.
+fn quick_sort_3way(r: &mut Recorder, lo: usize, hi: usize) {
+    if lo >= hi {
+        if lo == hi {
+            r.sorted(lo);
+        }
+        return;
+    }
+    r.push(Op::Enter {
+        lo,
+        hi: hi + 1,
+        mid: None,
+    });
+    let pivot = r.a[lo];
+    let (mut lt, mut i, mut gt) = (lo, lo + 1, hi);
+    r.push(Op::Pivot(Some(lt)));
+    while i <= gt {
+        // One three-way comparison against the pivot, which always sits at lt.
+        r.push(Op::Compare(i, lt));
+        if r.a[i] < pivot {
+            r.swap(lt, i);
+            lt += 1;
+            i += 1;
+            r.push(Op::Pivot(Some(lt)));
+        } else if r.a[i] > pivot {
+            if i != gt {
+                r.swap(i, gt);
+            }
+            gt -= 1;
+        } else {
+            i += 1;
+        }
+    }
+    r.push(Op::Pivot(None));
+    // lt..=gt now all equal the pivot: all in their final places.
+    r.sorted_range(lt, gt + 1);
+    if lt > lo {
+        quick_sort_3way(r, lo, lt - 1);
+    }
+    quick_sort_3way(r, gt + 1, hi);
+    r.push(Op::Exit);
 }
 
 fn heapify(r: &mut Recorder, n: usize, i: usize) {
@@ -587,5 +673,44 @@ mod stack_tests {
         }
         // The last-element pivot peels off one value per call.
         assert_eq!(deepest, 29);
+    }
+}
+
+#[cfg(test)]
+mod quick3_tests {
+    use super::*;
+
+    fn comparisons(alg: Algorithm, data: &[u32]) -> usize {
+        let mut s = State::new(data);
+        for op in alg.record(data).ops {
+            s.apply(op);
+        }
+        s.comparisons
+    }
+
+    #[test]
+    fn three_way_wins_on_duplicates() {
+        let data: Vec<u32> = (0..200).map(|i| [10, 20, 30, 40][i % 4]).collect();
+        let two_way = comparisons(Algorithm::Quick, &data);
+        let three_way = comparisons(Algorithm::Quick3, &data);
+        assert!(
+            three_way * 5 < two_way,
+            "3-way {three_way} vs 2-way {two_way}"
+        );
+    }
+
+    #[test]
+    fn silent_recorder_sorts_without_logging() {
+        for alg in Algorithm::ALL {
+            let mut r = Recorder::silent(&[5, 1, 4, 2, 3]);
+            alg.run(&mut r);
+            assert_eq!(r.a, vec![1, 2, 3, 4, 5], "{alg:?}");
+            assert!(r.ops.is_empty());
+        }
+    }
+
+    #[test]
+    fn timing_is_positive() {
+        assert!(Algorithm::Merge.time_us(&[3, 1, 2]) > 0.0);
     }
 }

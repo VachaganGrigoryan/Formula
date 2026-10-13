@@ -21,7 +21,8 @@ Formulas included, grouped as in the sidebar:
 | Statistics & Trend Analysis | Line of best fit (least squares) | drag, add and remove points; residuals and squared errors; R² |
 | Animation & Easing | Cubic ease-out `f(t) = 1 − (1 − t)³` | curve and speed plot, linear vs eased race, bars gliding into place |
 | Color & Accessibility | Relative luminance `Y = 0.2126R + 0.7152G + 0.0722B` | heatmap picks black or white text per cell; contrast ratios; WCAG linearization toggle |
-| Sorting | Bubble, Selection, Insertion, Merge, Quick, Heap and Counting sort | one shared, randomizable list (size, random / nearly sorted / reversed / few unique); play, pause, step, step back and scrub through every recorded comparison, swap and write |
+| Sorting | Bubble, Selection, Insertion, Merge, Quick, Quick (3-way), Heap and Counting sort | one shared, randomizable list (size, random / nearly sorted / reversed / few unique); play, pause, step, step back and scrub through every recorded comparison, swap and write; four skins; sound |
+| | Sorting race | pick algorithms and race them on the same list with live comparison, move and timing bars |
 
 Each page shows the formula, a live visualization, and a "Where it's used" note.
 In the browser, `#id` in the URL (e.g. `index.html#mandelbrot`) opens a formula directly.
@@ -32,6 +33,8 @@ Native:
 
 ```sh
 cargo run --release
+# with sound on the sorting pages (Linux needs the ALSA headers: libasound2-dev)
+cargo run --release --features native-audio
 ```
 
 On Linux you need the usual windowing libraries (`libxkbcommon-x11`, an OpenGL driver).
@@ -62,12 +65,14 @@ src/
   formula.rs         the `Formula` trait, `Palette`, `MathText` equation builder
   draw.rs            drawing helpers: polygon fill, lerp/gradients, draggable handles
   rng.rs             small seeded random number generator
+  audio.rs           tones: Web Audio in the browser, cpal on desktop (feature native-audio)
   formulas/
     mod.rs           registry, category names, glyph-coverage test
     polar.rs  projection.rs  lerp.rs  bezier.rs  lissajous.rs
     force.rs  normalize.rs  mandelbrot.rs  distance.rs  rotation.rs
     regression.rs  easing.rs  luminance.rs
-    sorting/         algorithms.rs (records every step, UI-free), data.rs (shared list), mod.rs (player and view)
+    sorting/         algorithms.rs (records every step, UI-free), data.rs (shared list),
+                     skin.rs (bars / radial / spectrum / dots), race.rs, mod.rs (player and view)
     fourier/         epicycles: math.rs (UI-free), animals.rs, mod.rs (view)
 assets/animals.json  animal outlines
 ```
@@ -97,6 +102,22 @@ replays from the start, so you can scrub through a run like a video. Bars use on
 blue unsorted, red comparing, amber swapping or writing, green in final place, plus purple for
 selection's minimum or insertion's key and pink for quick sort's pivot. Heap sort draws the heap as a
 tree for lists of up to 63 values; counting sort shows its tally histogram and output array.
+
+Extras on every sorting page:
+
+- **Skins**: bars, radial (a clock face; swaps sweep a curve across it), color spectrum (value as hue,
+  so an unsorted list is a jumbled rainbow that settles into a gradient) and dot scatter.
+- **Sound**: each step plays the touched value as a pitch, `frequency = 150 + X_norm · 650` Hz, and a
+  finished run ends with a rising sweep. The browser build uses the Web Audio API; the desktop build
+  uses `cpal` when built with `--features native-audio`.
+- **Keys**: Space plays or pauses, the Left and Right arrows step back and forward.
+- **Presets**: Nearly sorted has just two or three values out of place, which is where insertion sort
+  shines; Few unique is where 3-way quick sort leaves the 2-way version behind.
+
+The **Sorting race** page runs the chosen algorithms on the same list at the same steps per second, so
+fewer operations means an earlier finish. Each lane shows comparisons and swaps + writes live, and,
+once it finishes, a measured time from actually running that algorithm (without recording) on this
+machine.
 
 To add another algorithm, add a variant to `Algorithm`, write it against `Recorder`, and add its
 text to `info()` in `sorting/mod.rs`; the tests check every algorithm sorts correctly and leaves no

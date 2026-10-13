@@ -19,12 +19,38 @@ eframe = { version = "0.36", default-features = false, features = [
 ] }
 egui = "0.36"
 serde = { version = "1.0.229", features = ["derive"] }
+web-time = "1.1"
 serde_json = "1.0.154"
+
+[features]
+# Sound on the native desktop build. Off by default because on Linux it needs
+# the ALSA development headers (libasound2-dev). The web build always has sound.
+native-audio = ["dep:cpal"]
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+cpal = { version = "0.18", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "=0.2.129"
 wasm-bindgen-futures = "0.4"
-web-sys = { version = "0.3", features = ["Document", "Element", "History", "HtmlCanvasElement", "Location", "Window", "console"] }
+web-sys = { version = "0.3", features = [
+    "AudioContext",
+    "AudioDestinationNode",
+    "AudioNode",
+    "AudioParam",
+    "AudioScheduledSourceNode",
+    "BaseAudioContext",
+    "Document",
+    "Element",
+    "GainNode",
+    "History",
+    "HtmlCanvasElement",
+    "Location",
+    "OscillatorNode",
+    "OscillatorType",
+    "Window",
+    "console",
+] }
 
 [profile.release]
 opt-level = 3
