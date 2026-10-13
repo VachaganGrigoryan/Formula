@@ -126,6 +126,16 @@ impl MathText {
         self
     }
 
+    /// The plain text of the equation, without formatting.
+    pub fn text(&self) -> String {
+        self.pieces
+            .iter()
+            .map(|(p, _)| match p {
+                Piece::Text(s) | Piece::Sub(s) | Piece::Sup(s) => s.as_str(),
+            })
+            .collect()
+    }
+
     pub fn layout(&self, palette: &Palette, size: f32) -> LayoutJob {
         let mut job = LayoutJob::default();
         for (piece, tone) in &self.pieces {
@@ -159,8 +169,16 @@ pub trait Formula {
     /// Display name, e.g. "Drawn by circles".
     fn name(&self) -> &'static str;
 
+    /// Sidebar group, e.g. "Curves & Interpolation".
+    fn category(&self) -> &'static str;
+
     /// One or two sentences shown under the title.
     fn summary(&self) -> &'static str;
+
+    /// Where the formula is used in practice, shown under the equations.
+    fn notes(&self) -> &'static str {
+        ""
+    }
 
     /// The equations being visualized, one per line.
     fn equations(&self) -> Vec<MathText>;
@@ -169,6 +187,15 @@ pub trait Formula {
     fn stage_height(&self, width: f32) -> f32 {
         width * 0.75
     }
+
+    /// What pointer input the stage listens to. Formulas that call
+    /// [`Formula::interact`] for dragging or clicking ask for more.
+    fn stage_sense(&self) -> egui::Sense {
+        egui::Sense::hover()
+    }
+
+    /// Handle pointer input on the stage. Called just before [`Formula::paint`].
+    fn interact(&mut self, _response: &egui::Response, _rect: egui::Rect) {}
 
     /// Paint the visualization into the stage. Called every frame;
     /// `dt` is the seconds elapsed since the previous frame.

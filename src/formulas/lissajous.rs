@@ -51,6 +51,16 @@ impl Formula for Lissajous {
         "Lissajous figures"
     }
 
+    fn category(&self) -> &'static str {
+        super::CURVES
+    }
+
+    fn notes(&self) -> &'static str {
+        "Oscilloscopes show the frequency ratio and phase difference of two signals \
+         as a Lissajous figure; the same curves appear in audio phase meters, \
+         vibration analysis and logo design."
+    }
+
     fn summary(&self) -> &'static str {
         "Two sine waves, one driving each axis. Whole-number frequency ratios \
          close into knots; the phase shift twists them."
