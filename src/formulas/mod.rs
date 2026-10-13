@@ -6,10 +6,13 @@
 pub mod bezier;
 pub mod distance;
 pub mod easing;
+pub mod flowfield;
 pub mod force;
 pub mod fourier;
 pub mod lerp;
+pub mod life;
 pub mod lissajous;
+pub mod lorenz;
 pub mod luminance;
 pub mod mandelbrot;
 pub mod normalize;
@@ -18,6 +21,7 @@ pub mod projection;
 pub mod regression;
 pub mod rotation;
 pub mod sorting;
+pub mod voronoi;
 
 use crate::formula::Formula;
 
@@ -27,6 +31,7 @@ pub const CURVES: &str = "Curves & Interpolation";
 pub const PHYSICS: &str = "Physics & Network Layouts";
 pub const SCALING: &str = "Data Scaling & Normalization";
 pub const FRACTALS: &str = "Fractals & Generative Patterns";
+pub const CHAOS: &str = "Chaos & Dynamical Systems";
 pub const GEOMETRY: &str = "Geometry & Spatial Analysis";
 pub const STATISTICS: &str = "Statistics & Trend Analysis";
 pub const ANIMATION: &str = "Animation & Easing";
@@ -48,8 +53,12 @@ pub fn registry() -> Vec<Box<dyn Formula>> {
         Box::new(force::ForceLayout::default()),
         Box::new(normalize::Normalize::default()),
         Box::new(mandelbrot::Mandelbrot::default()),
+        Box::new(flowfield::FlowField::default()),
+        Box::new(life::Life::default()),
+        Box::new(lorenz::Lorenz::default()),
         Box::new(distance::Distance::default()),
         Box::new(rotation::Rotation::default()),
+        Box::new(voronoi::Voronoi::default()),
         Box::new(regression::Regression::default()),
         Box::new(easing::Easing::default()),
         Box::new(luminance::Luminance::default()),
