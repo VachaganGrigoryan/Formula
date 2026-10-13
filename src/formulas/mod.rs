@@ -4,14 +4,19 @@
 //! and append it to [`registry`]. Nothing else in the app needs to change.
 
 pub mod bezier;
+pub mod distance;
+pub mod easing;
 pub mod force;
 pub mod fourier;
 pub mod lerp;
 pub mod lissajous;
+pub mod luminance;
 pub mod mandelbrot;
 pub mod normalize;
 pub mod polar;
 pub mod projection;
+pub mod regression;
+pub mod rotation;
 
 use crate::formula::Formula;
 
@@ -21,6 +26,10 @@ pub const CURVES: &str = "Curves & Interpolation";
 pub const PHYSICS: &str = "Physics & Network Layouts";
 pub const SCALING: &str = "Data Scaling & Normalization";
 pub const FRACTALS: &str = "Fractals & Generative Patterns";
+pub const GEOMETRY: &str = "Geometry & Spatial Analysis";
+pub const STATISTICS: &str = "Statistics & Trend Analysis";
+pub const ANIMATION: &str = "Animation & Easing";
+pub const COLOR: &str = "Color & Accessibility";
 
 /// Shown on first launch, before a choice has been remembered.
 pub const DEFAULT_ID: &str = "fourier-epicycles";
@@ -37,6 +46,11 @@ pub fn registry() -> Vec<Box<dyn Formula>> {
         Box::new(force::ForceLayout::default()),
         Box::new(normalize::Normalize::default()),
         Box::new(mandelbrot::Mandelbrot::default()),
+        Box::new(distance::Distance::default()),
+        Box::new(rotation::Rotation::default()),
+        Box::new(regression::Regression::default()),
+        Box::new(easing::Easing::default()),
+        Box::new(luminance::Luminance::default()),
     ]
 }
 
