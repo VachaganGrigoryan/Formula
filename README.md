@@ -16,6 +16,11 @@ Formulas included, grouped as in the sidebar:
 | Physics & Network Layouts | Springs and repulsion: Hooke `Fs = −k(d − x0)` + Coulomb `Fr = kr/d²` | drag nodes; force arrows on hover |
 | Data Scaling & Normalization | Min-max normalization | outlier slider, per-bar calculation on hover |
 | Fractals & Generative Patterns | Mandelbrot set `z(n+1) = z(n)² + c` | click/right-click to zoom, drag to pan, orbit on hover |
+| Geometry & Spatial Analysis | Euclidean distance `d = √((x2 − x1)² + (y2 − y1)²)` | nearest-point tooltip under the mouse; K-means clustering mode |
+| | 2D rotation `x' = x cos θ − y sin θ, y' = x sin θ + y cos θ` | drag the point; tilt crowded axis labels until they stop colliding |
+| Statistics & Trend Analysis | Line of best fit (least squares) | drag, add and remove points; residuals and squared errors; R² |
+| Animation & Easing | Cubic ease-out `f(t) = 1 − (1 − t)³` | curve and speed plot, linear vs eased race, bars gliding into place |
+| Color & Accessibility | Relative luminance `Y = 0.2126R + 0.7152G + 0.0722B` | heatmap picks black or white text per cell; contrast ratios; WCAG linearization toggle |
 
 Each page shows the formula, a live visualization, and a "Where it's used" note.
 In the browser, `#id` in the URL (e.g. `index.html#mandelbrot`) opens a formula directly.
@@ -59,7 +64,8 @@ src/
   formulas/
     mod.rs           registry, category names, glyph-coverage test
     polar.rs  projection.rs  lerp.rs  bezier.rs  lissajous.rs
-    force.rs  normalize.rs  mandelbrot.rs
+    force.rs  normalize.rs  mandelbrot.rs  distance.rs  rotation.rs
+    regression.rs  easing.rs  luminance.rs
     fourier/         epicycles: math.rs (UI-free), animals.rs, mod.rs (view)
 assets/animals.json  animal outlines
 ```
@@ -77,7 +83,7 @@ assets/animals.json  animal outlines
 The shell takes care of the sidebar, title, stage frame, equations, theming and remembering the
 selected formula. Use the `Palette` colors (`x`, `y`, `trace`, `fill`, …) so new formulas match the
 existing ones in both light and dark mode. Keep the math in plain functions with unit tests, as
-every module here does. egui's bundled font lacks some symbols (′ ∈ → ᵣ); `cargo test` fails if
+every module here does. egui's bundled font lacks some symbols (′ ∈ → ᵢ ᵣ, combining accents like x̄); `cargo test` fails if
 a formula's text uses a character with no glyph.
 
 ## Credits
