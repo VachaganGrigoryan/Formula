@@ -68,7 +68,7 @@ Comparisons between values: zero. Work: n tally increments, k − 1 additions fo
 ## Parameters in the app
 
 - **Data**: the app's lists hold the values 1 to n. Random, Nearly sorted and Reversed are permutations, so every tally is 1 and the running sum is a straight ramp. **Few unique** uses four distinct values, so the histogram has four tall bars and the output fills in four blocks; it is the most telling setting.
-- **List size** (5 to 200) and **Randomize list**: the input, shared by every sorting page. Here k grows with the list size.
+- **List size** (5 to 200) and **Randomize list**: the input, shared by every sorting viewport. Here k grows with the list size.
 - **Draw as** (Bars, Radial, Color spectrum, Dot scatter) and **Sound** (a tone per value touched).
 - **Speed**, **Step**, and the Restart, Step back, Play / Pause, Step and Finish buttons (or Space and the arrow keys) replay the recorded steps.
 - Panels: the input on top, the histogram `count[value]` in the middle (tallies, then running sums, then counting down as values are placed), and the output array at the bottom.

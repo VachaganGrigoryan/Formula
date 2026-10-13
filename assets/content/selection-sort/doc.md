@@ -69,7 +69,7 @@ Compared with bubble sort on random data it makes the same number of comparisons
 
 - **List size**: the number of bars, from 5 to 200 (default 40).
 - **Data**: Random, Nearly sorted, Reversed or Few unique. Watch the comparison count: it is the same for all four.
-- **Randomize list**: a new arrangement, shared by every sorting page.
+- **Randomize list**: a new arrangement, shared by every sorting viewport.
 - **Draw as**: Bars, Radial, Color spectrum or Dot scatter. Colors: blue unsorted, red comparing, amber swapping, purple the current minimum, green in final place.
 - **Sound**: a tone per step, pitch 150 + value · 650 Hz.
 - **Speed**: steps per second (logarithmic, 1 to 5000); it starts so that a full run takes about fifteen seconds.

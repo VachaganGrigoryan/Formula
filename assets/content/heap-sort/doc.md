@@ -71,7 +71,7 @@ Comparisons: at most 2n while building and two per level per sift-down while ext
 
 ## Parameters in the app
 
-- **List size** (5 to 200) and **Data** (Random, Nearly sorted, Reversed, Few unique): the input, shared by every sorting page. Heap sort's step count depends only mildly on the order of the input (a reversed list is already a max-heap). **Randomize list** draws a new arrangement.
+- **List size** (5 to 200) and **Data** (Random, Nearly sorted, Reversed, Few unique): the input, shared by every sorting viewport. Heap sort's step count depends only mildly on the order of the input (a reversed list is already a max-heap). **Randomize list** draws a new arrangement.
 - **Draw as** (Bars, Radial, Color spectrum, Dot scatter) and **Sound** (a tone per value touched).
 - **Speed**, **Step**, and the Restart, Step back, Play / Pause, Step and Finish buttons (or Space and the arrow keys) replay the recorded steps.
 - **Tree view**: with 63 values or fewer, the heap is also drawn as a binary tree under the bars, with node `i` connected to `2i + 1` and `2i + 2`. Edges inside the heap are drawn stronger than those leading to sorted values.

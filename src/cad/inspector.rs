@@ -36,6 +36,8 @@ pub struct Inspector {
     rect_before: Option<(u64, egui::Rect)>,
     title_before: Option<(u64, String)>,
     notice: Option<(String, f64)>,
+    /// Widened for reading docs and code (not saved).
+    pub maximized: bool,
 }
 
 impl Inspector {
@@ -51,6 +53,7 @@ impl Inspector {
             rect_before: None,
             title_before: None,
             notice: None,
+            maximized: false,
         }
     }
 
@@ -131,6 +134,16 @@ impl Inspector {
                                         .color(chrome.text_dim),
                                 );
                             }
+                        }
+                    });
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+                        let (icon, tip) = if self.maximized {
+                            (Icon::Restore, "Restore the Inspector's width")
+                        } else {
+                            (Icon::Maximize, "Widen the Inspector for reading")
+                        };
+                        if icons::button(ui, icon, self.maximized, tip).clicked() {
+                            self.maximized = !self.maximized;
                         }
                     });
                 });
@@ -485,6 +498,9 @@ impl Inspector {
                     if icon_text_button(ui, Icon::Download, export::SAVE_LABEL, chrome).clicked() {
                         self.notice = Some((
                             match export::save(tool.id, self.lang.file_name(), src) {
+                                Ok(path) if cfg!(target_arch = "wasm32") => {
+                                    format!("Downloaded {path}")
+                                }
                                 Ok(path) => format!("Saved {path}"),
                                 Err(e) => format!("Could not save: {e}"),
                             },

@@ -44,8 +44,8 @@ placing it first if needed.
 | --- | --- |
 | Toolbar | Select (V) and Pan (H), undo/redo, zoom; one button per category with a menu of its tools |
 | Browser (left) | Tool library (click to place, double-click to place beside the drawing) and the list of viewports with show/hide and lock |
-| Canvas | Infinite drafting plane with an adaptive grid, origin axes, rulers, crosshair, navigator and title block |
-| Inspector (right) | **Properties**: name, X/Y/W/H, lock, the equations and the formula's controls. **Docs**: the full reference. **Code**: Python, TypeScript and Rust, with Copy and Download (Save on desktop) |
+| Canvas | Infinite drafting plane with an adaptive grid, origin axes, rulers, crosshair, navigator (with zoom, fit and 1:1 buttons) and title block |
+| Inspector (right) | **Properties**: name, X/Y/W/H, lock, the equations and the formula's controls. **Docs**: the full reference. **Code**: Python, TypeScript and Rust, with Copy and Download (Save on desktop). The maximize button widens it for reading |
 | Command line | Type a tool alias (`LOR`, `BEZ`, `MAN`, `VOR`, …) or name to place it, or a command: `fit`, `zoom 150`, `del`, `dup`, `undo`, `redo`, `grid`, `snap`, `ortho`, `help` |
 | Status bar | Pointer coordinates, current tool, SNAP / GRID / ORTHO toggles, zoom, viewport count, fps |
 

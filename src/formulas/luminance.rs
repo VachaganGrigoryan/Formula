@@ -2,7 +2,7 @@
 
 use egui::{Align2, Color32, FontId, Pos2, Rect, Sense, Stroke, pos2, vec2};
 
-use crate::formula::{Formula, MathText, Palette, Tone};
+use crate::formula::{Formula, MathText, Palette, Tone, fit_text};
 
 /// Channel weights: the eye is most sensitive to green, least to blue.
 pub const WEIGHTS: [f32; 3] = [0.2126, 0.7152, 0.0722];
@@ -164,6 +164,11 @@ impl Formula for Luminance {
         (width * 0.42).max(220.0) + PANEL_H
     }
 
+    fn min_size(&self) -> egui::Vec2 {
+        // The cell labels and the Y = ... breakdown line need the width.
+        egui::vec2(560.0, self.stage_height(560.0))
+    }
+
     fn is_animating(&self) -> bool {
         false
     }
@@ -258,11 +263,10 @@ impl Luminance {
                 "{label}  {ratio:.1}:1{}",
                 if wins { "  (best)" } else { "" }
             );
-            painter.text(
+            let galley = fit_text(painter, line, font, swatch.width() - 28.0, color);
+            painter.galley(
                 swatch.left_top() + vec2(14.0, 18.0 + 40.0 * k as f32),
-                Align2::LEFT_TOP,
-                line,
-                font,
+                galley,
                 color,
             );
         }
@@ -331,35 +335,31 @@ impl Luminance {
         };
         let mono = FontId::monospace(12.5);
         let base = pos2(bar_area.left(), bar_area.bottom() + 24.0);
-        painter.text(
-            base,
-            Align2::LEFT_TOP,
-            format!(
-                "RGB {} {} {}, channels {}",
-                c[0],
-                c[1],
-                c[2],
-                if self.linearize {
-                    "linearized"
-                } else {
-                    "as is, /255"
-                }
-            ),
-            mono.clone(),
-            palette.muted,
+        let room = panel.right() - base.x;
+        let rgb_line = format!(
+            "RGB {} {} {}, channels {}",
+            c[0],
+            c[1],
+            c[2],
+            if self.linearize {
+                "linearized"
+            } else {
+                "as is, /255"
+            }
         );
-        painter.text(
-            base + vec2(0.0, 18.0),
-            Align2::LEFT_TOP,
-            format!(
-                "Y = 0.2126·{:.2} + 0.7152·{:.2} + 0.0722·{:.2} = {y:.3}",
-                channel(0),
-                channel(1),
-                channel(2)
-            ),
-            mono,
-            palette.ink,
+        let y_line = format!(
+            "Y = 0.2126·{:.2} + 0.7152·{:.2} + 0.0722·{:.2} = {y:.3}",
+            channel(0),
+            channel(1),
+            channel(2)
         );
+        for (k, (line, color)) in [(rgb_line, palette.muted), (y_line, palette.ink)]
+            .into_iter()
+            .enumerate()
+        {
+            let galley = fit_text(painter, line, mono.clone(), room, color);
+            painter.galley(base + vec2(0.0, 18.0 * k as f32), galley, color);
+        }
     }
 }
 

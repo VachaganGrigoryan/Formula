@@ -73,7 +73,7 @@ Swaps always equal the inversion count. Comparisons depend on the number of pass
 
 - **List size**: the number of bars, from 5 to 200 (default 40).
 - **Data**: the input distribution: Random, Nearly sorted, Reversed or Few unique. Reversed is the worst case; Nearly sorted shows the early exit.
-- **Randomize list**: a new arrangement, shared by every sorting page so algorithms can be compared on the same input.
+- **Randomize list**: a new arrangement, shared by every sorting viewport so algorithms can be compared on the same input.
 - **Draw as**: Bars, Radial, Color spectrum or Dot scatter. Colors: blue unsorted, red comparing, amber swapping, green in final place.
 - **Sound**: plays a tone for each step, with pitch 150 + value · 650 Hz.
 - **Speed**: steps per second (logarithmic, 1 to 5000); it starts so that a full run takes about fifteen seconds.

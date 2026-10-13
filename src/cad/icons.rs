@@ -32,6 +32,8 @@ pub enum Ui {
     Help,
     Layers,
     Properties,
+    Maximize,
+    Restore,
 }
 
 struct Pen<'a> {
@@ -505,6 +507,21 @@ pub fn ui(painter: &Painter, rect: Rect, icon: Ui, color: Color32) {
                 p.rect(x - 0.08, y - 0.08, x + 0.08, y + 0.08, true);
             }
         }
+        Ui::Maximize => {
+            p.rect(0.12, 0.12, 0.88, 0.88, false);
+            p.line(&[(0.36, 0.64), (0.7, 0.3)]);
+            p.line(&[(0.46, 0.3), (0.7, 0.3), (0.7, 0.54)]);
+        }
+        Ui::Restore => {
+            p.rect(0.12, 0.34, 0.66, 0.88, false);
+            p.line(&[
+                (0.34, 0.34),
+                (0.34, 0.12),
+                (0.88, 0.12),
+                (0.88, 0.66),
+                (0.66, 0.66),
+            ]);
+        }
     }
 }
 
@@ -512,6 +529,19 @@ pub fn ui(painter: &Painter, rect: Rect, icon: Ui, color: Color32) {
 pub fn button(ui: &mut egui::Ui, icon: Ui, on: bool, tip: &str) -> egui::Response {
     paint_button(ui, on, tip, |painter, rect, color| {
         self::ui(painter, rect, icon, color)
+    })
+}
+
+/// A short text label (like "1:1") drawn as an icon button.
+pub fn text_button(ui: &mut egui::Ui, text: &str, tip: &str) -> egui::Response {
+    paint_button(ui, false, tip, |painter, rect, color| {
+        painter.text(
+            rect.center(),
+            egui::Align2::CENTER_CENTER,
+            text,
+            egui::FontId::monospace(11.0),
+            color,
+        );
     })
 }
 

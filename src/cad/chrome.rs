@@ -597,7 +597,12 @@ pub fn command_line(ui: &mut egui::Ui, ws: &mut Workspace, p: &mut Panels, chrom
         .inner_margin(Margin::symmetric(8, 4))
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
-            for msg in ws.log.iter().rev().take(2).rev() {
+            // Always two lines, so the canvas above doesn't jump when the log grows.
+            let shown = ws.log.len().min(2);
+            for _ in shown..2 {
+                ui.label(RichText::new(" ").font(mono(11.0)));
+            }
+            for msg in &ws.log[ws.log.len() - shown..] {
                 ui.label(RichText::new(msg).font(mono(11.0)).color(chrome.text_dim));
             }
             ui.horizontal(|ui| {

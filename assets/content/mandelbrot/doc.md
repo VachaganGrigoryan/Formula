@@ -66,7 +66,7 @@ Every pixel is independent, so the work parallelizes perfectly across threads or
 - **Max iterations**: the iteration limit (30 to 3000). Deeper zooms need more, or points just outside the set are wrongly drawn black and fine detail disappears.
 - **Whole set**, **Seahorse valley**, **Mini Mandelbrot**: jump to the full view, the spiral-filled gap between the cardioid and the period-2 bulb, or a tiny copy of the set on the real axis near −1.75.
 - **Hover**: draws the orbit z₀, z₁, z₂, … of the point under the cursor and says whether it escapes and after how many iterations.
-- **Click** to zoom in 2x, **right-click** to zoom out, **drag** to pan, and use the **scroll wheel** or a **pinch** to zoom smoothly. The readout shows the current magnification.
+- **Click** to zoom in 2x, **right-click** to zoom out, **drag** to pan, and use the **scroll wheel** or a **pinch** to zoom smoothly. These work while the viewport is selected; on an unselected viewport the wheel zooms the canvas instead. The readout shows the current magnification.
 
 ## Numerical notes and pitfalls
 

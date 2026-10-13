@@ -1,9 +1,11 @@
 //! The contract every visualized formula implements.
 //!
-//! The app shell owns layout (catalogue, title, stage, controls, equations);
-//! a formula only supplies its metadata, its drawing and its own widgets.
-//! To add a new formula, implement [`Formula`] and register it in
-//! [`crate::formulas::registry`].
+//! The workspace owns layout (viewports on the canvas, and the Inspector with
+//! the equations and controls); a formula only supplies its metadata, its
+//! drawing and its own widgets. To add a new formula, implement [`Formula`]
+//! and add it to [`crate::formulas::TOOLS`].
+
+use std::sync::Arc;
 
 use egui::text::LayoutJob;
 use egui::{Align, Color32, FontId, TextFormat};
@@ -161,6 +163,23 @@ impl MathText {
     }
 }
 
+/// Lay out one line of `text`, shrinking the font (down to 9 points) when it
+/// would be wider than `width`. Paint it with [`egui::Painter::galley`].
+pub fn fit_text(
+    painter: &egui::Painter,
+    text: String,
+    font: FontId,
+    width: f32,
+    color: Color32,
+) -> Arc<egui::Galley> {
+    let natural = painter.layout_no_wrap(text.clone(), font.clone(), color);
+    if natural.size().x <= width {
+        return natural;
+    }
+    let size = (font.size * width / natural.size().x).max(9.0);
+    painter.layout_no_wrap(text, FontId::new(size, font.family), color)
+}
+
 /// Everything the shell needs from a formula.
 pub trait Formula {
     /// Stable identifier (used for persistence and lookup).
@@ -213,10 +232,10 @@ pub trait Formula {
     }
 
     /// The smallest stage the formula lays out correctly in. The workspace
-    /// will not let a viewport be resized below this. By default: 240 wide,
+    /// will not let a viewport be resized below this. By default: 360 wide,
     /// and as tall as [`Formula::stage_height`] asks for at that width.
     fn min_size(&self) -> egui::Vec2 {
-        egui::vec2(240.0, self.stage_height(240.0))
+        egui::vec2(360.0, self.stage_height(360.0))
     }
 
     /// Keyboard shortcuts of the formula itself. Called once per frame, only
@@ -228,5 +247,32 @@ pub trait Formula {
     /// the active viewport (the workspace then leaves them alone over it).
     fn wants_scroll(&self) -> bool {
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fit_text_shrinks_only_when_needed() {
+        let ctx = egui::Context::default();
+        let mut out = ctx.run_ui(Default::default(), |ui| {
+            let painter = ui.painter();
+            let font = FontId::monospace(12.0);
+            let short = fit_text(painter, "abc".into(), font.clone(), 200.0, Color32::WHITE);
+            assert!(short.size().x <= 200.0);
+            assert_eq!(short.job.sections[0].format.font_id.size, 12.0);
+
+            let long = "x".repeat(30);
+            let fitted = fit_text(painter, long.clone(), font.clone(), 200.0, Color32::WHITE);
+            assert!(fitted.size().x <= 201.0, "{}", fitted.size().x);
+            assert!(fitted.job.sections[0].format.font_id.size < 12.0);
+
+            // Never below 9 points, even if that still overflows.
+            let tiny = fit_text(painter, long, font, 20.0, Color32::WHITE);
+            assert_eq!(tiny.job.sections[0].format.font_id.size, 9.0);
+        });
+        out.textures_delta.clear();
     }
 }

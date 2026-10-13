@@ -1,7 +1,7 @@
 //! Sorting algorithms, visualized by replaying every step they take.
 //!
-//! All sorting pages share one [`data::Dataset`], so a shuffle on one page
-//! shows up on every other and algorithms can be compared on the same input.
+//! All sorting viewports share one [`data::Dataset`], so a shuffle in one
+//! shows up in every other and algorithms can be compared on the same input.
 
 pub mod algorithms;
 pub mod data;
@@ -14,17 +14,17 @@ use std::rc::Rc;
 use egui::{Align2, Color32, FontId, Pos2, Rect, Stroke, pos2, vec2};
 
 use crate::audio::{self, Audio};
-use crate::formula::{Formula, MathText, Palette, Tone};
+use crate::formula::{Formula, MathText, Palette, Tone, fit_text};
 use algorithms::{Algorithm, Op, State};
 use data::{Distribution, Shared};
 use skin::{Mark, Skin};
 
-/// View settings shared by every sorting page.
+/// View settings shared by every sorting viewport.
 pub struct View {
     pub skin: Skin,
 }
 
-/// Everything the sorting pages share: the list, how it is drawn, and the
+/// Everything the sorting viewports share: the list, how it is drawn, and the
 /// one audio output.
 #[derive(Clone)]
 pub struct Session {
@@ -563,6 +563,11 @@ impl Formula for SortVisualizer {
         }
     }
 
+    fn min_size(&self) -> egui::Vec2 {
+        // The step / comparisons / swaps / writes line needs the width.
+        egui::vec2(480.0, self.stage_height(480.0))
+    }
+
     fn paint(&mut self, painter: &egui::Painter, rect: Rect, palette: &Palette, dt: f32) {
         self.sync();
         self.tone_cooldown -= dt;
@@ -598,27 +603,19 @@ impl Formula for SortVisualizer {
         let n = self.initial.len();
         let max = self.initial.iter().copied().max().unwrap_or(1);
         let inner = rect.shrink2(vec2(18.0, 14.0));
-        let mono = FontId::monospace(12.5);
         let s = &self.state;
 
-        let mut status = format!(
-            "step {} / {}    comparisons {}    swaps {}    writes {}",
-            self.cursor,
-            self.ops.len(),
-            s.comparisons,
-            s.swaps,
-            s.writes
-        );
+        let mut fields = vec![
+            format!("step {} / {}", self.cursor, self.ops.len()),
+            format!("comparisons {}", s.comparisons),
+            format!("swaps {}", s.swaps),
+            format!("writes {}", s.writes),
+        ];
         if !s.stack.is_empty() {
-            status.push_str(&format!("    recursion depth {}", s.stack.len()));
+            fields.push(format!("recursion depth {}", s.stack.len()));
         }
-        painter.text(
-            inner.left_top(),
-            Align2::LEFT_TOP,
-            status,
-            mono.clone(),
-            palette.ink,
-        );
+        let status = fit_line(painter, &fields, inner.width(), 12.5, palette.ink);
+        painter.galley(inner.left_top(), status, palette.ink);
 
         let extra = match self.alg {
             Algorithm::Counting => 190.0,
@@ -1002,15 +999,28 @@ impl SortVisualizer {
     }
 }
 
-/// One page per algorithm, all sharing a single dataset.
-pub fn pages() -> Vec<Box<dyn Formula>> {
-    let session = Session::new();
-    let mut pages: Vec<Box<dyn Formula>> = Algorithm::ALL
-        .into_iter()
-        .map(|alg| Box::new(SortVisualizer::new(alg, session.clone())) as Box<dyn Formula>)
-        .collect();
-    pages.push(Box::new(race::Race::new(session)));
-    pages
+/// Lay out `fields` on one line no wider than `width`: first by tightening
+/// the gaps between them, then by shrinking the font.
+fn fit_line(
+    painter: &egui::Painter,
+    fields: &[String],
+    width: f32,
+    size: f32,
+    color: Color32,
+) -> std::sync::Arc<egui::Galley> {
+    for gap in ["    ", "   "] {
+        let galley = painter.layout_no_wrap(fields.join(gap), FontId::monospace(size), color);
+        if galley.size().x <= width {
+            return galley;
+        }
+    }
+    fit_text(
+        painter,
+        fields.join("  "),
+        FontId::monospace(size),
+        width,
+        color,
+    )
 }
 
 #[cfg(test)]
@@ -1018,7 +1028,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn pages_share_data_and_resync() {
+    fn viewports_share_data_and_resync() {
         let session = Session::new();
         let data = session.data.clone();
         let mut bubble = SortVisualizer::new(Algorithm::Bubble, session.clone());

@@ -69,7 +69,7 @@ A shift is one assignment, whereas a swap is three, so insertion sort moves data
 
 - **List size**: the number of bars, from 5 to 200 (default 40).
 - **Data**: Random, Nearly sorted, Reversed or Few unique. Try Nearly sorted to see the linear best case.
-- **Randomize list**: a new arrangement, shared by every sorting page.
+- **Randomize list**: a new arrangement, shared by every sorting viewport.
 - **Draw as**: Bars, Radial, Color spectrum or Dot scatter. The key appears as a purple outline over the hole (red while it is being compared); bars right of the sorted prefix are faded; amber marks a write; everything turns green at the end.
 - **Sound**: a tone per step, pitch 150 + value · 650 Hz.
 - **Speed**: steps per second (logarithmic, 1 to 5000); it starts so that a full run takes about fifteen seconds.

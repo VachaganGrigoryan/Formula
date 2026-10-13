@@ -71,7 +71,7 @@ merge_sort(a, lo, hi):            # sorts a[lo..hi-1]
 
 - **List size**: the number of bars, from 5 to 200 (default 40).
 - **Data**: Random, Nearly sorted, Reversed or Few unique. The running time barely changes, but sorted input needs fewer comparisons.
-- **Randomize list**: a new arrangement, shared by every sorting page.
+- **Randomize list**: a new arrangement, shared by every sorting viewport.
 - **Draw as**: Bars, Radial, Color spectrum or Dot scatter. Red marks the two front values being compared, amber a write, green values placed by the final merge; bars outside the current call are faded.
 - **Recursion rows**: one row per open call under the bars, outermost on top; the bright row is the active merge, its halves in two colors.
 - **Sound**: a tone per step, pitch 150 + value · 650 Hz.

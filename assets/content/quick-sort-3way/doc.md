@@ -75,8 +75,8 @@ Comparisons: exactly hi − lo three-way comparisons per partition, one per valu
 
 ## Parameters in the app
 
-- **Data**: choose **Few unique** (four distinct values) and compare the step and comparison counts with the Quick sort page on the same list. Random, Nearly sorted and Reversed give all-distinct values; the last two show the quadratic worst case of a first-element pivot.
-- **List size** (5 to 200) and **Randomize list**: the input, shared by every sorting page.
+- **Data**: choose **Few unique** (four distinct values) and compare the step and comparison counts with a Quick sort viewport on the same list. Random, Nearly sorted and Reversed give all-distinct values; the last two show the quadratic worst case of a first-element pivot.
+- **List size** (5 to 200) and **Randomize list**: the input, shared by every sorting viewport.
 - **Draw as** (Bars, Radial, Color spectrum, Dot scatter) and **Sound** (a tone per value touched).
 - **Speed**, **Step**, and the Restart, Step back, Play / Pause, Step and Finish buttons (or Space and the arrow keys) replay the recorded steps.
 - Colors: red marks `a[i]` and the pivot being compared, amber a swap, pink the pivot at `lt`, green final values. When a partition ends, its whole equal band turns green. Bars outside the current call are faded, and the bracket rows show the open recursive calls.

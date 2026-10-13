@@ -7,6 +7,7 @@
 
 use std::collections::HashMap;
 
+use egui::emath::TSTransform;
 use egui::{
     CursorIcon, Id, Key, LayerId, Modifiers, PointerButton, Pos2, Rect, Response, Sense, Stroke,
     UiBuilder, Vec2, pos2, vec2,
@@ -138,7 +139,12 @@ enum Gesture {
         from: Pos2,
         additive: bool,
     },
-    Minimap,
+    /// Dragging in the navigator. The mapping is frozen at the start: the
+    /// live one includes the visible area, which moves with the camera.
+    Minimap {
+        map: Rect,
+        to_world: TSTransform,
+    },
 }
 
 /// Responses from one frame, handled after everything is laid out.
@@ -778,6 +784,39 @@ impl Workspace {
         } else {
             None
         };
+        // Its buttons: zoom out / in, fit, 100%.
+        let mut strip_hovered = false;
+        if let Some((map, _, _)) = &minimap {
+            let strip = overlay::minimap_strip(*map);
+            painter.rect_filled(strip, 3.0, chrome.panel.gamma_multiply(0.92));
+            painter.rect_stroke(
+                strip,
+                3.0,
+                Stroke::new(1.0, chrome.border),
+                egui::StrokeKind::Inside,
+            );
+            // A child, not a scope: a scope would grow the overlay's own rect
+            // over the whole canvas and hide the viewports from hit-testing.
+            let mut bar = oui.new_child(
+                UiBuilder::new()
+                    .max_rect(strip.shrink(3.0))
+                    .layout(egui::Layout::left_to_right(egui::Align::Center)),
+            );
+            bar.spacing_mut().item_spacing.x = 2.0;
+            if icons::button(&mut bar, icons::Ui::ZoomOut, false, "Zoom out").clicked() {
+                self.zoom_by(0.8);
+            }
+            if icons::button(&mut bar, icons::Ui::ZoomIn, false, "Zoom in").clicked() {
+                self.zoom_by(1.25);
+            }
+            if icons::button(&mut bar, icons::Ui::Fit, false, "Fit all (F)").clicked() {
+                self.fit_all();
+            }
+            if icons::text_button(&mut bar, "1:1", "Zoom to 100% (Ctrl+0)").clicked() {
+                self.camera.zoom_to(1.0);
+            }
+            strip_hovered = hover.is_some_and(|p| strip.contains(p));
+        }
 
         // ---- Handle this frame's input.
         let pointer_screen = ctx.input(|i| i.pointer.interact_pos()).or(hover);
@@ -841,18 +880,22 @@ impl Workspace {
                 });
             }
         }
-        if let Some((_, m, r)) = &minimap {
+        if let Some((map, m, r)) = &minimap {
             if r.drag_started() || r.clicked() {
-                self.gesture = Some(Gesture::Minimap);
-            }
-            if matches!(self.gesture, Some(Gesture::Minimap))
-                && let Some(p) = pointer_screen
-            {
-                self.camera.center = m.inverse().mul_pos(p);
+                self.gesture = Some(Gesture::Minimap {
+                    map: *map,
+                    to_world: m.inverse(),
+                });
             }
             if r.hovered() {
                 ctx.set_cursor_icon(CursorIcon::PointingHand);
             }
+        }
+
+        if let Some(Gesture::Minimap { map, to_world }) = &self.gesture
+            && let Some(p) = pointer_screen
+        {
+            self.camera.center = to_world.mul_pos(map.clamp(p));
         }
 
         match self.mode {
@@ -974,7 +1017,9 @@ impl Workspace {
                         Some(Gesture::Marquee { from, additive })
                     }
                 }
-                Gesture::Minimap => (!done).then_some(Gesture::Minimap),
+                Gesture::Minimap { map, to_world } => {
+                    (!done).then_some(Gesture::Minimap { map, to_world })
+                }
             };
             self.gesture = keep;
         } else if !primary_down {
@@ -989,7 +1034,7 @@ impl Workspace {
         // Dimensions on a single selection, also while moving or resizing it.
         let other_gesture = matches!(
             self.gesture,
-            Some(Gesture::Place { .. } | Gesture::Marquee { .. } | Gesture::Minimap)
+            Some(Gesture::Place { .. } | Gesture::Marquee { .. } | Gesture::Minimap { .. })
         );
         if !other_gesture
             && let [uid] = self.board.selection[..]
@@ -1003,7 +1048,8 @@ impl Workspace {
         }
         let over_chrome = tabs.iter().any(|(_, r)| r.hovered())
             || grips.iter().any(|(_, _, r)| r.hovered() || r.dragged())
-            || minimap.as_ref().is_some_and(|(_, _, r)| r.hovered());
+            || minimap.as_ref().is_some_and(|(_, _, r)| r.hovered())
+            || strip_hovered;
         let over_viewport = hovered_vp.is_some() || over_chrome;
         if let Mode::Place(tool) = self.mode {
             let (r, label) = match place_rect {
@@ -1461,6 +1507,159 @@ mod tests {
         let r = ws.resize_to(a, Handle::W, start, pos2(start.min.x - 200.0, 0.0), false);
         assert_eq!(r.max.x, start.max.x);
         assert!(r.width() >= start.width() + 199.0);
+    }
+
+    /// Records the pointer positions of the drags it receives.
+    struct Probe(std::rc::Rc<std::cell::RefCell<Vec<Pos2>>>);
+
+    impl crate::formula::Formula for Probe {
+        fn id(&self) -> &'static str {
+            "probe"
+        }
+        fn name(&self) -> &'static str {
+            "Probe"
+        }
+        fn category(&self) -> &'static str {
+            "Test"
+        }
+        fn summary(&self) -> &'static str {
+            ""
+        }
+        fn equations(&self) -> Vec<crate::formula::MathText> {
+            Vec::new()
+        }
+        fn stage_sense(&self) -> Sense {
+            Sense::drag()
+        }
+        fn interact(&mut self, response: &egui::Response, _rect: Rect) {
+            if response.dragged()
+                && let Some(p) = response.interact_pointer_pos()
+            {
+                self.0.borrow_mut().push(p);
+            }
+        }
+        fn paint(&mut self, _: &egui::Painter, _: Rect, _: &Palette, _: f32) {}
+        fn controls(&mut self, _: &mut egui::Ui, _: &Palette) {}
+    }
+
+    /// Runs the workspace frame by frame on a 1600 x 1000 screen.
+    #[derive(Default)]
+    struct Frames {
+        ctx: egui::Context,
+        time: f64,
+    }
+
+    impl Frames {
+        fn run(&mut self, ws: &mut Workspace, events: Vec<egui::Event>) {
+            self.time += 1.0 / 60.0;
+            let input = egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 1000.0))),
+                time: Some(self.time),
+                events,
+                ..Default::default()
+            };
+            let (chrome, palette) = (Chrome::graphite(), super::super::theme::palette(true));
+            let mut out = self.ctx.run_ui(input, |ui| {
+                egui::CentralPanel::default().show(ui, |ui| ws.show(ui, &chrome, &palette));
+            });
+            out.textures_delta.clear();
+        }
+    }
+
+    /// Drag with the primary button from `from` to `to` (screen points),
+    /// one frame per event.
+    fn drag_frames(from: Pos2, to: Pos2) -> Vec<Vec<egui::Event>> {
+        let button = |pos, pressed| egui::Event::PointerButton {
+            pos,
+            button: PointerButton::Primary,
+            pressed,
+            modifiers: Default::default(),
+        };
+        let mut frames = vec![
+            vec![egui::Event::PointerMoved(from)],
+            vec![button(from, true)],
+        ];
+        for k in 1..=8 {
+            frames.push(vec![egui::Event::PointerMoved(
+                from.lerp(to, k as f32 / 8.0),
+            )]);
+        }
+        frames.push(vec![button(to, false)]);
+        frames.push(vec![]);
+        frames
+    }
+
+    /// Dragging inside the selected viewport goes to its formula, in world
+    /// coordinates, and leaves the viewport where it is. Dragging an
+    /// unselected viewport moves it. (Guards against anything on the overlay
+    /// hiding the world layer from egui's hit test.)
+    #[test]
+    fn drags_reach_the_active_formula_or_move_the_viewport() {
+        let mut ws = workspace();
+        let lerp = formulas::tool("lerp").unwrap();
+        let a = ws.place(lerp, Some(pos2(0.0, 0.0)), vec2(400.0, 300.0));
+        let b = ws.place(lerp, Some(pos2(480.0, 0.0)), vec2(400.0, 300.0));
+        let seen = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+        ws.board.get_mut(a).unwrap().formula = Box::new(Probe(seen.clone()));
+        ws.board.selection = vec![a];
+        ws.camera = Camera::default();
+        // Off-center, so the world-to-screen translation is not zero.
+        ws.camera.center = pos2(500.0, 200.0);
+        let (rect_a, rect_b) = (ws.board.get(a).unwrap().rect, ws.board.get(b).unwrap().rect);
+
+        let mut frames = Frames::default();
+        frames.run(&mut ws, vec![]);
+        let t = ws.camera.transform(ws.view, 1.0);
+
+        for events in drag_frames(t.mul_pos(pos2(100.0, 150.0)), t.mul_pos(pos2(160.0, 190.0))) {
+            frames.run(&mut ws, events);
+        }
+        let seen = seen.borrow();
+        assert!(!seen.is_empty(), "the formula saw no drag");
+        let last = *seen.last().unwrap();
+        assert!(last.distance(pos2(160.0, 190.0)) < 1.0, "{last:?}");
+        assert_eq!(ws.board.get(a).unwrap().rect, rect_a);
+
+        for events in drag_frames(t.mul_pos(pos2(600.0, 150.0)), t.mul_pos(pos2(600.0, 350.0))) {
+            frames.run(&mut ws, events);
+        }
+        let moved = ws.board.get(b).unwrap().rect;
+        assert_eq!(moved.size(), rect_b.size());
+        assert!(moved.top() > rect_b.top() + 150.0, "{moved:?}");
+    }
+
+    /// Dragging from the navigator out past its edge keeps the camera on the
+    /// drawing (the live map includes the view, which moves with the camera).
+    #[test]
+    fn navigator_drag_stays_on_the_drawing() {
+        let mut ws = workspace();
+        let lerp = formulas::tool("lerp").unwrap();
+        ws.place(lerp, Some(pos2(0.0, 0.0)), vec2(400.0, 300.0));
+        ws.place(lerp, Some(pos2(480.0, 0.0)), vec2(400.0, 300.0));
+        ws.board.selection.clear();
+        ws.camera = Camera::default();
+        ws.camera.center = pos2(440.0, 150.0);
+
+        let mut frames = Frames::default();
+        frames.run(&mut ws, vec![]);
+        let map = overlay::minimap_rect(ws.view);
+        let from = map.center();
+        let to = map.left_top() - vec2(400.0, 300.0);
+        let mut steps = drag_frames(from, to);
+        // Hold the pointer out there for a while.
+        let last = steps.pop().unwrap();
+        let release = steps.pop().unwrap();
+        steps.extend(std::iter::repeat_n(vec![], 60));
+        steps.push(release);
+        steps.push(last);
+        for events in steps {
+            frames.run(&mut ws, events);
+        }
+        let c = ws.camera.center;
+        assert!(
+            c.x.abs() < 3000.0 && c.y.abs() < 3000.0,
+            "camera ran away to {c:?}"
+        );
     }
 
     #[test]

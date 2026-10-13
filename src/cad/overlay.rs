@@ -434,6 +434,12 @@ pub fn minimap_rect(view: Rect) -> Rect {
     Rect::from_min_size(view.right_bottom() - size - vec2(14.0, 14.0), size)
 }
 
+/// The navigator's button strip, just above its top-right corner.
+pub fn minimap_strip(map: Rect) -> Rect {
+    let size = vec2(4.0 * 26.0 + 3.0 * 2.0 + 6.0, 30.0);
+    Rect::from_min_size(pos2(map.right() - size.x, map.top() - size.y - 4.0), size)
+}
+
 /// The world-to-minimap mapping: (scale, offset) for the board bounds.
 pub fn minimap_map(map: Rect, bounds: Rect) -> TSTransform {
     let inner = map.shrink(8.0);

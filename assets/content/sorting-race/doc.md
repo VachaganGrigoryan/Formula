@@ -85,7 +85,7 @@ All entries are O(·); `k` is the range of values for counting sort. Approximate
 - **Racers**: check any of the eight algorithms; lanes appear in catalogue order (default: bubble, insertion, merge, quick, heap).
 - **List size**: 5 to 200 values (default 40).
 - **Data**: Random, Nearly sorted, Reversed or Few unique.
-- **Randomize list**: a new arrangement, shared with every sorting page.
+- **Randomize list**: a new arrangement, shared with every sorting viewport.
 - **Draw as**: Bars, Radial, Color spectrum or Dot scatter, using the same colors as the single-algorithm pages.
 - **Speed**: steps per second for every lane (logarithmic, 1 to 5000), paced at first so the slowest lane takes about fifteen seconds.
 - **Go / Pause / Race again**, **Restart** and **Finish** control the race clock.

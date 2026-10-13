@@ -73,7 +73,7 @@ Comparisons: exactly n − 1 per partition of n values, n(n − 1)/2 in the wors
 
 ## Parameters in the app
 
-- **List size** (5 to 200) and **Data** (Random, Nearly sorted, Reversed, Few unique): the input, shared by every sorting page. Nearly sorted and Reversed show the quadratic worst case of a last-element pivot. **Randomize list** draws a new arrangement.
+- **List size** (5 to 200) and **Data** (Random, Nearly sorted, Reversed, Few unique): the input, shared by every sorting viewport. Nearly sorted and Reversed show the quadratic worst case of a last-element pivot. **Randomize list** draws a new arrangement.
 - **Draw as**: Bars, Radial, Color spectrum or Dot scatter. **Sound** plays a tone whose pitch follows the value being touched.
 - **Speed** and **Step**: replay rate in steps per second, and a scrubber over the recorded steps; Restart, Step back, Play / Pause, Step and Finish, or Space and the arrow keys.
 - Colors: blue unsorted, red comparing, amber swapping, pink the pivot, green in final place. Bars outside the current partition are faded; the bracket rows under the bars show the open recursive calls, one row per depth.

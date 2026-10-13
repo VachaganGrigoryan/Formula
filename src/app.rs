@@ -177,10 +177,18 @@ impl eframe::App for FormulaApp {
             // The library's hovered/picked tool is what the inspector shows
             // when nothing is selected.
             self.inspector.tool = self.panels.picked;
-            egui::Panel::right("cad-inspector")
-                .resizable(true)
-                .default_size(380.0)
-                .size_range(300.0..=760.0)
+            // Maximized, the panel has its own id so the normal width is kept.
+            let panel = if self.inspector.maximized {
+                egui::Panel::right("cad-inspector-max")
+                    .resizable(false)
+                    .exact_size((width * 0.62).max(380.0))
+            } else {
+                egui::Panel::right("cad-inspector")
+                    .resizable(true)
+                    .default_size(380.0)
+                    .size_range(300.0..=760.0)
+            };
+            panel
                 .frame(
                     Frame::new()
                         .fill(chrome.panel)
