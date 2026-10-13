@@ -11,6 +11,9 @@ const SAMPLES: usize = 720;
 const RADIANS_PER_SECOND: f64 = 0.25;
 
 pub struct Lissajous {
+    /// Amplitudes.
+    amp_x: f64,
+    amp_y: f64,
     a: u32,
     b: u32,
     /// Phase offset of x, in units of π.
@@ -18,17 +21,25 @@ pub struct Lissajous {
     speed: u32,
     t: f64,
     playing: bool,
+    /// Advance δ over time so the figure morphs and appears to spin.
+    drift: bool,
+    /// δ change per second, in units of π.
+    drift_rate: f64,
 }
 
 impl Default for Lissajous {
     fn default() -> Self {
         Self {
+            amp_x: 1.0,
+            amp_y: 1.0,
             a: 3,
             b: 2,
             delta: 0.5,
             speed: 4,
             t: 0.0,
             playing: true,
+            drift: true,
+            drift_rate: 0.05,
         }
     }
 }
@@ -36,8 +47,8 @@ impl Default for Lissajous {
 impl Lissajous {
     fn point(&self, t: f64) -> [f64; 2] {
         [
-            (self.a as f64 * t + self.delta * PI).sin(),
-            (self.b as f64 * t).sin(),
+            self.amp_x * (self.a as f64 * t + self.delta * PI).sin(),
+            self.amp_y * (self.b as f64 * t).sin(),
         ]
     }
 }
@@ -63,7 +74,8 @@ impl Formula for Lissajous {
 
     fn summary(&self) -> &'static str {
         "Two sine waves, one driving each axis. Whole-number frequency ratios \
-         close into knots; the phase shift twists them."
+         close into knots; the phase shift twists them. With drift on, δ creeps \
+         forward and the knot morphs and seems to turn in 3D."
     }
 
     fn equations(&self) -> Vec<MathText> {
@@ -71,8 +83,8 @@ impl Formula for Lissajous {
             MathText::new()
                 .t("x(t)")
                 .tone(Tone::X)
-                .t(" = sin(a t + δπ)"),
-            MathText::new().t("y(t)").tone(Tone::Y).t(" = sin(b t)"),
+                .t(" = A sin(a t + δπ)"),
+            MathText::new().t("y(t)").tone(Tone::Y).t(" = B sin(b t)"),
         ]
     }
 
@@ -86,6 +98,9 @@ impl Formula for Lissajous {
             if self.t >= TAU {
                 self.t -= TAU;
             }
+        }
+        if self.drift {
+            self.delta = (self.delta + self.drift_rate * dt as f64).rem_euclid(2.0);
         }
 
         // Plot area, with gutters on the top and left for the two oscillators.
@@ -175,6 +190,12 @@ impl Formula for Lissajous {
             .num_columns(2)
             .spacing([12.0, 10.0])
             .show(ui, |ui| {
+                ui.label("A");
+                ui.add(egui::Slider::new(&mut self.amp_x, 0.1..=1.0).step_by(0.05));
+                ui.end_row();
+                ui.label("B");
+                ui.add(egui::Slider::new(&mut self.amp_y, 0.1..=1.0).step_by(0.05));
+                ui.end_row();
                 ui.label("a");
                 ui.add(egui::Slider::new(&mut self.a, 1..=9));
                 ui.end_row();
@@ -190,6 +211,17 @@ impl Formula for Lissajous {
                 ui.end_row();
                 ui.label("Speed");
                 ui.add(egui::Slider::new(&mut self.speed, 1..=10));
+                ui.end_row();
+                ui.label("Drift");
+                ui.horizontal(|ui| {
+                    ui.checkbox(&mut self.drift, "");
+                    ui.add_enabled(
+                        self.drift,
+                        egui::Slider::new(&mut self.drift_rate, 0.01..=0.3)
+                            .step_by(0.01)
+                            .suffix(" π/s"),
+                    );
+                });
                 ui.end_row();
             });
         ui.add_space(6.0);

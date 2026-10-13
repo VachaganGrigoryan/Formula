@@ -12,12 +12,16 @@ Formulas included, grouped as in the sidebar:
 | Curves & Interpolation | Linear interpolation `v(t) = v0 + t(v1 − v0)` | drag endpoints; numbers and colors too |
 | | Cubic Bézier curve | drag control points; de Casteljau construction and Bernstein weights |
 | | Drawn by circles (Fourier epicycles) | 64 animal silhouettes traced by up to 200 circles |
-| | Lissajous figures `x = sin(at + δπ), y = sin(bt)` | frequency and phase sliders |
+| | Lissajous figures `x = A sin(at + δπ), y = B sin(bt)` | amplitude, frequency and phase sliders; δ drifts so the figure morphs |
 | Physics & Network Layouts | Springs and repulsion: Hooke `Fs = −k(d − x0)` + Coulomb `Fr = kr/d²` | drag nodes; force arrows on hover |
 | Data Scaling & Normalization | Min-max normalization | outlier slider, per-bar calculation on hover |
 | Fractals & Generative Patterns | Mandelbrot set `z(n+1) = z(n)² + c` | click/right-click to zoom, drag to pan, orbit on hover |
+| | Perlin noise flow field `θ = N(x, y, t) · 2π · k` | particles with fading trails; field readout on hover; vector overlay |
+| | Conway's Game of Life | draw/erase cells, classic patterns, the rule for the hovered cell, fading trails of dead cells |
+| Chaos & Dynamical Systems | Lorenz attractor `dx/dt = σ(y − x), dy/dt = x(ρ − z) − y, dz/dt = xy − βz` | RK4 integration, drag to orbit, σ/ρ/β sliders, up to three nearly identical starts with a log plot of their separation |
 | Geometry & Spatial Analysis | Euclidean distance `d = √((x2 − x1)² + (y2 − y1)²)` | nearest-point tooltip under the mouse; K-means clustering mode |
 | | 2D rotation `x' = x cos θ − y sin θ, y' = x sin θ + y cos θ` | drag the point; tilt crowded axis labels until they stop colliding |
+| | Voronoi diagram `V(pᵢ) = {x : d(x, pᵢ) ≤ d(x, pⱼ) for all j ≠ i}` | drag, add and remove seeds; drift; Lloyd relaxation; Delaunay edges; giraffe, cracked mud and dragonfly-wing styles |
 | Statistics & Trend Analysis | Line of best fit (least squares) | drag, add and remove points; residuals and squared errors; R² |
 | Animation & Easing | Cubic ease-out `f(t) = 1 − (1 − t)³` | curve and speed plot, linear vs eased race, bars gliding into place |
 | Color & Accessibility | Relative luminance `Y = 0.2126R + 0.7152G + 0.0722B` | heatmap picks black or white text per cell; contrast ratios; WCAG linearization toggle |
@@ -69,8 +73,8 @@ src/
   formulas/
     mod.rs           registry, category names, glyph-coverage test
     polar.rs  projection.rs  lerp.rs  bezier.rs  lissajous.rs
-    force.rs  normalize.rs  mandelbrot.rs  distance.rs  rotation.rs
-    regression.rs  easing.rs  luminance.rs
+    force.rs  normalize.rs  mandelbrot.rs  flowfield.rs  life.rs  lorenz.rs
+    distance.rs  rotation.rs  voronoi.rs  regression.rs  easing.rs  luminance.rs
     sorting/         algorithms.rs (records every step, UI-free), data.rs (shared list),
                      skin.rs (bars / radial / spectrum / dots), race.rs, mod.rs (player and view)
     fourier/         epicycles: math.rs (UI-free), animals.rs, mod.rs (view)
