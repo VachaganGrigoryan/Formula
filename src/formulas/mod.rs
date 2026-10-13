@@ -17,6 +17,7 @@ pub mod polar;
 pub mod projection;
 pub mod regression;
 pub mod rotation;
+pub mod sorting;
 
 use crate::formula::Formula;
 
@@ -30,13 +31,14 @@ pub const GEOMETRY: &str = "Geometry & Spatial Analysis";
 pub const STATISTICS: &str = "Statistics & Trend Analysis";
 pub const ANIMATION: &str = "Animation & Easing";
 pub const COLOR: &str = "Color & Accessibility";
+pub const SORTING: &str = "Sorting";
 
 /// Shown on first launch, before a choice has been remembered.
 pub const DEFAULT_ID: &str = "fourier-epicycles";
 
 /// The catalogue, in the order shown in the sidebar.
 pub fn registry() -> Vec<Box<dyn Formula>> {
-    vec![
+    let mut all: Vec<Box<dyn Formula>> = vec![
         Box::new(polar::Polar::default()),
         Box::new(projection::Projection::default()),
         Box::new(lerp::Lerp::default()),
@@ -51,7 +53,10 @@ pub fn registry() -> Vec<Box<dyn Formula>> {
         Box::new(regression::Regression::default()),
         Box::new(easing::Easing::default()),
         Box::new(luminance::Luminance::default()),
-    ]
+    ];
+    // One page per algorithm, sharing a single dataset.
+    all.extend(sorting::pages());
+    all
 }
 
 #[cfg(test)]

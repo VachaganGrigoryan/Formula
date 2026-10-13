@@ -21,6 +21,7 @@ Formulas included, grouped as in the sidebar:
 | Statistics & Trend Analysis | Line of best fit (least squares) | drag, add and remove points; residuals and squared errors; R² |
 | Animation & Easing | Cubic ease-out `f(t) = 1 − (1 − t)³` | curve and speed plot, linear vs eased race, bars gliding into place |
 | Color & Accessibility | Relative luminance `Y = 0.2126R + 0.7152G + 0.0722B` | heatmap picks black or white text per cell; contrast ratios; WCAG linearization toggle |
+| Sorting | Bubble, Selection, Insertion, Merge, Quick, Heap and Counting sort | one shared, randomizable list (size, random / nearly sorted / reversed / few unique); play, pause, step, step back and scrub through every recorded comparison, swap and write |
 
 Each page shows the formula, a live visualization, and a "Where it's used" note.
 In the browser, `#id` in the URL (e.g. `index.html#mandelbrot`) opens a formula directly.
@@ -66,6 +67,7 @@ src/
     polar.rs  projection.rs  lerp.rs  bezier.rs  lissajous.rs
     force.rs  normalize.rs  mandelbrot.rs  distance.rs  rotation.rs
     regression.rs  easing.rs  luminance.rs
+    sorting/         algorithms.rs (records every step, UI-free), data.rs (shared list), mod.rs (player and view)
     fourier/         epicycles: math.rs (UI-free), animals.rs, mod.rs (view)
 assets/animals.json  animal outlines
 ```
@@ -85,6 +87,20 @@ selected formula. Use the `Palette` colors (`x`, `y`, `trace`, `fill`, …) so n
 existing ones in both light and dark mode. Keep the math in plain functions with unit tests, as
 every module here does. egui's bundled font lacks some symbols (′ ∈ → ᵢ ᵣ, combining accents like x̄); `cargo test` fails if
 a formula's text uses a character with no glyph.
+
+## Sorting visualizer
+
+Each algorithm runs once on the shared list inside a `Recorder` and logs every operation
+(`Compare`, `Swap`, `Write`, `Sorted`, pivot/minimum/key markers, recursion `Enter`/`Exit`, and
+counting sort's tallies). The page replays that log at the chosen speed, and seeking backwards
+replays from the start, so you can scrub through a run like a video. Bars use one color language:
+blue unsorted, red comparing, amber swapping or writing, green in final place, plus purple for
+selection's minimum or insertion's key and pink for quick sort's pivot. Heap sort draws the heap as a
+tree for lists of up to 63 values; counting sort shows its tally histogram and output array.
+
+To add another algorithm, add a variant to `Algorithm`, write it against `Recorder`, and add its
+text to `info()` in `sorting/mod.rs`; the tests check every algorithm sorts correctly and leaves no
+state behind.
 
 ## Credits
 
