@@ -14,6 +14,7 @@ use egui::{Color32, FontId, Mesh, Pos2, Rect, Sense, Shape, Stroke, Vec2, pos2, 
 
 use crate::draw::{self, Span};
 use crate::formula::{Formula, MathText, Palette, Tone};
+use crate::rng::Rng;
 use animals::{Animal, GROUPS};
 use math::{MAX_TERMS, Point, SAMPLES, Series, Term};
 
@@ -47,7 +48,7 @@ pub struct Epicycles {
     grow: Option<f32>,
     search: String,
     group: usize,
-    rng: u64,
+    rng: Rng,
 }
 
 impl Default for Epicycles {
@@ -74,7 +75,7 @@ impl Default for Epicycles {
             grow: None,
             search: String::new(),
             group: 0,
-            rng: 0x9E37_79B9_7F4A_7C15,
+            rng: Rng::new(64),
         };
         s.select(start);
         s
@@ -109,12 +110,8 @@ impl Epicycles {
         if self.animals.len() < 2 {
             return;
         }
-        // xorshift64: no need for a crate to pick an animal.
         loop {
-            self.rng ^= self.rng << 13;
-            self.rng ^= self.rng >> 7;
-            self.rng ^= self.rng << 17;
-            let i = (self.rng % self.animals.len() as u64) as usize;
+            let i = self.rng.index(self.animals.len());
             if i != self.current {
                 self.select(i);
                 return;
@@ -220,6 +217,16 @@ impl Formula for Epicycles {
 
     fn name(&self) -> &'static str {
         "Drawn by circles"
+    }
+
+    fn category(&self) -> &'static str {
+        super::CURVES
+    }
+
+    fn notes(&self) -> &'static str {
+        "Fourier series compress outlines and signals into a few coefficients: shape \
+         descriptors in computer vision, JPEG and MP3 compression, smoothing noisy \
+         contours, and morphing between shapes by blending their coefficients."
     }
 
     fn summary(&self) -> &'static str {

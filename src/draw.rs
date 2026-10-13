@@ -91,6 +91,52 @@ pub fn fill_polygon(points: &[Pos2], color: Color32, step: f32) -> Mesh {
     mesh
 }
 
+/// Linear interpolation `a + t (b − a)`.
+pub fn lerp(a: f32, b: f32, t: f32) -> f32 {
+    a + t * (b - a)
+}
+
+/// Interpolate two colors channel by channel (in gamma space, like CSS).
+pub fn lerp_color(a: Color32, b: Color32, t: f32) -> Color32 {
+    let ch = |x: u8, y: u8| lerp(x as f32, y as f32, t).round().clamp(0.0, 255.0) as u8;
+    Color32::from_rgba_premultiplied(
+        ch(a.r(), b.r()),
+        ch(a.g(), b.g()),
+        ch(a.b(), b.b()),
+        ch(a.a(), b.a()),
+    )
+}
+
+/// Sample a multi-stop gradient at `t` in `[0, 1]`.
+pub fn gradient(stops: &[Color32], t: f32) -> Color32 {
+    match stops.len() {
+        0 => Color32::TRANSPARENT,
+        1 => stops[0],
+        n => {
+            let x = t.clamp(0.0, 1.0) * (n - 1) as f32;
+            let i = (x.floor() as usize).min(n - 2);
+            lerp_color(stops[i], stops[i + 1], x - i as f32)
+        }
+    }
+}
+
+/// A round draggable handle, highlighted while hovered or dragged.
+pub fn handle(painter: &egui::Painter, at: Pos2, color: Color32, ring: Color32, active: bool) {
+    let r = if active { 8.0 } else { 6.5 };
+    painter.circle(at, r, color, egui::Stroke::new(2.0, ring));
+}
+
+/// Index of the point nearest to `at` within `radius`, if any.
+pub fn pick(points: &[Pos2], at: Pos2, radius: f32) -> Option<usize> {
+    points
+        .iter()
+        .enumerate()
+        .map(|(i, p)| (i, p.distance(at)))
+        .filter(|&(_, d)| d <= radius)
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(i, _)| i)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -121,6 +167,15 @@ mod tests {
             pos2(0.0, 4.0),
         ];
         assert!((area(&polygon_spans(&l, 0.5)) - 12.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn gradient_hits_stops() {
+        let stops = [Color32::BLACK, Color32::WHITE, Color32::BLACK];
+        assert_eq!(gradient(&stops, 0.0), Color32::BLACK);
+        assert_eq!(gradient(&stops, 0.5), Color32::WHITE);
+        assert_eq!(gradient(&stops, 1.0), Color32::BLACK);
+        assert_eq!(gradient(&stops, 0.25), Color32::from_gray(128));
     }
 
     #[test]

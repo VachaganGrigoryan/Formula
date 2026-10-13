@@ -1,6 +1,6 @@
 //! The app shell: a catalogue of formulas and a page for the selected one.
 
-use egui::{Color32, CornerRadius, Frame, Margin, RichText, ScrollArea, Sense, Stroke};
+use egui::{Color32, CornerRadius, Frame, Margin, RichText, ScrollArea, Stroke};
 
 use crate::formula::{Formula, Palette};
 use crate::formulas;
@@ -16,26 +16,61 @@ pub struct FormulaApp {
 
 impl FormulaApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        Self::with_initial(cc, None)
+    }
+
+    /// Start on the formula with id `initial` if there is one (e.g. from a URL),
+    /// otherwise on the last one viewed.
+    pub fn with_initial(cc: &eframe::CreationContext<'_>, initial: Option<&str>) -> Self {
         let formulas = formulas::registry();
-        let selected = cc
-            .storage
-            .and_then(|s| s.get_string("formula"))
-            .and_then(|id| formulas.iter().position(|f| f.id() == id))
+        let find = |id: &str| formulas.iter().position(|f| f.id() == id);
+        let selected = initial
+            .and_then(find)
+            .or_else(|| {
+                cc.storage
+                    .and_then(|s| s.get_string("formula"))
+                    .and_then(|id| find(&id))
+            })
+            .or_else(|| find(formulas::DEFAULT_ID))
             .unwrap_or(0);
         Self { formulas, selected }
     }
 
     fn catalogue(&mut self, ui: &mut egui::Ui, palette: &Palette) {
-        ui.add_space(12.0);
-        ui.label(RichText::new("Formulas").strong().color(palette.muted));
-        ui.add_space(6.0);
+        ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+            ui.add_space(12.0);
+            for (category, members) in self.categories() {
+                ui.label(
+                    RichText::new(category)
+                        .small()
+                        .strong()
+                        .color(palette.muted),
+                );
+                ui.add_space(2.0);
+                for i in members {
+                    if ui
+                        .selectable_label(i == self.selected, self.formulas[i].name())
+                        .clicked()
+                    {
+                        self.selected = i;
+                    }
+                }
+                ui.add_space(12.0);
+            }
+            egui::widgets::global_theme_preference_buttons(ui);
+        });
+    }
+
+    /// Formula indices grouped by category, in registry order.
+    fn categories(&self) -> Vec<(&'static str, Vec<usize>)> {
+        let mut groups: Vec<(&'static str, Vec<usize>)> = Vec::new();
         for (i, f) in self.formulas.iter().enumerate() {
-            if ui.selectable_label(i == self.selected, f.name()).clicked() {
-                self.selected = i;
+            match groups.iter_mut().find(|(c, _)| *c == f.category()) {
+                Some((_, members)) => members.push(i),
+                None => groups.push((f.category(), vec![i])),
             }
         }
-        ui.add_space(16.0);
-        egui::widgets::global_theme_preference_buttons(ui);
+        groups
     }
 
     fn page(&mut self, ui: &mut egui::Ui, palette: &Palette, narrow: bool) {
@@ -45,8 +80,11 @@ impl FormulaApp {
                 egui::ComboBox::from_id_salt("formula-picker")
                     .selected_text(current)
                     .show_ui(ui, |ui| {
-                        for (i, f) in self.formulas.iter().enumerate() {
-                            ui.selectable_value(&mut self.selected, i, f.name());
+                        for (category, members) in self.categories() {
+                            ui.label(RichText::new(category).small().color(palette.muted));
+                            for i in members {
+                                ui.selectable_value(&mut self.selected, i, self.formulas[i].name());
+                            }
                         }
                     });
                 egui::widgets::global_theme_preference_switch(ui);
@@ -63,6 +101,13 @@ impl FormulaApp {
                 .color(palette.ink),
         );
         ui.add_space(4.0);
+        ui.label(
+            RichText::new(formula.category())
+                .small()
+                .strong()
+                .color(palette.trace),
+        );
+        ui.add_space(2.0);
         ui.label(RichText::new(formula.summary()).color(palette.muted));
         ui.add_space(16.0);
 
@@ -74,7 +119,8 @@ impl FormulaApp {
             .corner_radius(CornerRadius::same(20))
             .show(ui, |ui| {
                 let (response, painter) =
-                    ui.allocate_painter(egui::vec2(width - 2.0, height), Sense::hover());
+                    ui.allocate_painter(egui::vec2(width - 2.0, height), formula.stage_sense());
+                formula.interact(&response, response.rect);
                 let dt = ui.input(|i| i.stable_dt).min(0.1);
                 formula.paint(
                     &painter.with_clip_rect(response.rect),
@@ -93,6 +139,20 @@ impl FormulaApp {
         ui.add_space(14.0);
         for eq in formula.equations() {
             ui.label(eq.layout(palette, 17.0));
+        }
+        let notes = formula.notes();
+        if !notes.is_empty() {
+            ui.add_space(12.0);
+            Frame::new()
+                .stroke(Stroke::new(1.0, palette.rule))
+                .corner_radius(CornerRadius::same(12))
+                .inner_margin(Margin::same(12))
+                .show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    ui.label(RichText::new("Where it's used").strong().color(palette.ink));
+                    ui.add_space(2.0);
+                    ui.label(RichText::new(notes).color(palette.muted));
+                });
         }
         ui.add_space(24.0);
         formula.details(ui, palette);
@@ -134,6 +194,9 @@ impl eframe::App for FormulaApp {
                     });
                 });
             });
+
+        #[cfg(target_arch = "wasm32")]
+        crate::web::show_in_url(self.formulas[self.selected].id());
 
         if self.formulas[self.selected].is_animating() {
             ui.ctx().request_repaint();

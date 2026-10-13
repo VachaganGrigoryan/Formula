@@ -7,6 +7,7 @@ pub mod app;
 pub mod draw;
 pub mod formula;
 pub mod formulas;
+pub mod rng;
 
 pub use app::FormulaApp;
 
