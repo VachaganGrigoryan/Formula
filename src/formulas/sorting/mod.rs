@@ -5,12 +5,137 @@
 
 pub mod algorithms;
 pub mod data;
+pub mod race;
+pub mod skin;
+
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use egui::{Align2, Color32, FontId, Pos2, Rect, Stroke, pos2, vec2};
 
+use crate::audio::{self, Audio};
 use crate::formula::{Formula, MathText, Palette, Tone};
 use algorithms::{Algorithm, Op, State};
 use data::{Distribution, Shared};
+use skin::{Mark, Skin};
+
+/// View settings shared by every sorting page.
+pub struct View {
+    pub skin: Skin,
+}
+
+/// Everything the sorting pages share: the list, how it is drawn, and the
+/// one audio output.
+#[derive(Clone)]
+pub struct Session {
+    pub data: Shared,
+    pub view: Rc<RefCell<View>>,
+    pub audio: Rc<RefCell<Audio>>,
+}
+
+impl Session {
+    pub fn new() -> Self {
+        Self {
+            data: data::shared(),
+            view: Rc::new(RefCell::new(View { skin: Skin::Bars })),
+            audio: Rc::new(RefCell::new(Audio::default())),
+        }
+    }
+
+    /// The list controls: size, distribution and the randomizer.
+    pub fn data_controls(&self, ui: &mut egui::Ui, palette: &Palette) {
+        let mut data = self.data.borrow_mut();
+        let mut changed = false;
+        egui::Grid::new("sort-data")
+            .num_columns(2)
+            .spacing([12.0, 10.0])
+            .show(ui, |ui| {
+                ui.label("List size");
+                changed |= ui.add(egui::Slider::new(&mut data.n, 5..=200)).changed();
+                ui.end_row();
+                ui.label("Data");
+                ui.horizontal_wrapped(|ui| {
+                    for d in Distribution::ALL {
+                        if ui.selectable_label(data.dist == d, d.label()).clicked() {
+                            data.dist = d;
+                            changed = true;
+                        }
+                    }
+                });
+                ui.end_row();
+            });
+        if changed {
+            data.regenerate();
+        }
+        ui.add_space(6.0);
+        ui.horizontal_wrapped(|ui| {
+            if ui.button("Randomize list").clicked() {
+                data.shuffle();
+            }
+            ui.label(
+                egui::RichText::new("shared by every sorting page")
+                    .small()
+                    .color(palette.muted),
+            );
+        });
+    }
+
+    /// The skin picker and sound switch.
+    pub fn view_controls(&self, ui: &mut egui::Ui, palette: &Palette) {
+        egui::Grid::new("sort-view")
+            .num_columns(2)
+            .spacing([12.0, 10.0])
+            .show(ui, |ui| {
+                ui.label("Draw as");
+                ui.horizontal_wrapped(|ui| {
+                    let mut view = self.view.borrow_mut();
+                    for skin in Skin::ALL {
+                        ui.selectable_value(&mut view.skin, skin, skin.label());
+                    }
+                });
+                ui.end_row();
+                ui.label("Sound");
+                ui.horizontal_wrapped(|ui| {
+                    let mut audio = self.audio.borrow_mut();
+                    let mut on = audio.enabled();
+                    let can = Audio::available();
+                    if ui
+                        .add_enabled(can, egui::Checkbox::new(&mut on, "Play tones"))
+                        .changed()
+                    {
+                        audio.set_enabled(on);
+                    }
+                    if audio.enabled() {
+                        ui.add(
+                            egui::Slider::new(&mut audio.volume, 0.0..=1.0)
+                                .show_value(false)
+                                .text("volume"),
+                        );
+                    }
+                    if let Some(why) = audio.unavailable_reason() {
+                        ui.label(egui::RichText::new(why).small().color(palette.muted));
+                    } else {
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "pitch = {:.0} + value \u{b7} {:.0} Hz",
+                                audio::LOW_HZ,
+                                audio::HIGH_HZ - audio::LOW_HZ
+                            ))
+                            .small()
+                            .color(palette.muted),
+                        );
+                    }
+                });
+                ui.end_row();
+            });
+    }
+}
+
+impl Default for Session {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 /// Colors for the states a bar can be in.
 #[derive(Clone, Copy)]
@@ -42,6 +167,14 @@ impl Colors {
         }
     }
 
+    fn of(&self, mark: Mark) -> Color32 {
+        match mark {
+            Mark::Idle => self.idle,
+            Mark::Faded => self.faded,
+            Mark::Sorted(c) | Mark::Active(c) => c,
+        }
+    }
+
     fn legend(&self, alg: Algorithm) -> Vec<(&'static str, Color32)> {
         let mut v = if alg == Algorithm::Counting {
             vec![
@@ -59,7 +192,7 @@ impl Colors {
         match alg {
             Algorithm::Selection => v.push(("current minimum", self.min)),
             Algorithm::Insertion => v.push(("key being inserted", self.min)),
-            Algorithm::Quick => v.push(("pivot", self.pivot)),
+            Algorithm::Quick | Algorithm::Quick3 => v.push(("pivot", self.pivot)),
             _ => {}
         }
         v.push(("in final place", self.sorted));
@@ -138,6 +271,20 @@ fn info(alg: Algorithm) -> Info {
             space: "O(log n)",
             code: "def quick_sort(arr, low, high):\n    if low < high:\n        pi = partition(arr, low, high)\n        quick_sort(arr, low, pi - 1)\n        quick_sort(arr, pi + 1, high)\n\ndef partition(arr, low, high):\n    pivot = arr[high]\n    i = low - 1\n    for j in range(low, high):\n        if arr[j] <= pivot:\n            i += 1\n            arr[i], arr[j] = arr[j], arr[i]\n    arr[i + 1], arr[high] = arr[high], arr[i + 1]\n    return i + 1",
         },
+        Algorithm::Quick3 => Info {
+            id: "quick-sort-3way",
+            name: "Quick sort (3-way)",
+            summary: "Split around the pivot into three bands: smaller, equal and larger. Every copy \
+                      of the pivot value lands in its final place in one pass. Try it on \
+                      \"Few unique\" data next to the 2-way version.",
+            notes: "Dijkstra's \"Dutch national flag\" partition. Lists with many duplicates are \
+                    common in practice (categories, ratings, flags), and on them the plain 2-way \
+                    quick sort keeps re-partitioning equal values, while 3-way finishes them all \
+                    at once. Library sorts use the same idea.",
+            time: "O(n log n) average, close to O(n) with few distinct values",
+            space: "O(log n)",
+            code: "def quick_sort_3way(arr, lo, hi):\n    if lo >= hi:\n        return\n    pivot = arr[lo]\n    lt, i, gt = lo, lo + 1, hi\n    while i <= gt:\n        if arr[i] < pivot:\n            arr[lt], arr[i] = arr[i], arr[lt]\n            lt += 1; i += 1\n        elif arr[i] > pivot:\n            arr[i], arr[gt] = arr[gt], arr[i]\n            gt -= 1\n        else:\n            i += 1\n    # arr[lt..gt] all equal the pivot\n    quick_sort_3way(arr, lo, lt - 1)\n    quick_sort_3way(arr, gt + 1, hi)",
+        },
         Algorithm::Heap => Info {
             id: "heap-sort",
             name: "Heap sort",
@@ -170,7 +317,7 @@ fn info(alg: Algorithm) -> Info {
 pub struct SortVisualizer {
     alg: Algorithm,
     info: Info,
-    data: Shared,
+    session: Session,
     /// The dataset generation the recording was made from.
     generation: u64,
     initial: Vec<u32>,
@@ -183,14 +330,21 @@ pub struct SortVisualizer {
     speed: f32,
     /// Fractional steps carried between frames.
     carry: f32,
+    /// Seconds until another tone may play.
+    tone_cooldown: f32,
+    /// The closing sweep across the sorted list, in seconds since it began.
+    sweep: Option<f32>,
 }
 
+/// How long the closing sweep takes.
+const SWEEP_SECONDS: f32 = 1.2;
+
 impl SortVisualizer {
-    pub fn new(alg: Algorithm, data: Shared) -> Self {
+    pub fn new(alg: Algorithm, session: Session) -> Self {
         let mut s = Self {
             alg,
             info: info(alg),
-            data,
+            session,
             generation: u64::MAX,
             initial: Vec::new(),
             ops: Vec::new(),
@@ -199,6 +353,8 @@ impl SortVisualizer {
             playing: true,
             speed: 30.0,
             carry: 0.0,
+            tone_cooldown: 0.0,
+            sweep: None,
         };
         s.sync();
         s
@@ -206,7 +362,7 @@ impl SortVisualizer {
 
     /// Re-record if the shared data changed since the last recording.
     fn sync(&mut self) {
-        let data = self.data.borrow();
+        let data = self.session.data.borrow();
         if data.generation() == self.generation {
             return;
         }
@@ -217,6 +373,7 @@ impl SortVisualizer {
         self.state = State::new(&self.initial);
         self.cursor = 0;
         self.carry = 0.0;
+        self.sweep = None;
         self.playing = true;
         // Aim for a run of about fifteen seconds at the default speed.
         self.speed = (self.ops.len() as f32 / 15.0).clamp(4.0, 3000.0);
@@ -243,8 +400,16 @@ impl SortVisualizer {
         self.alg == Algorithm::Heap && self.initial.len() <= 63
     }
 
-    /// Color for bar `i` in the main array.
-    fn bar_color(&self, i: usize, c: &Colors) -> Color32 {
+    /// The state of slot `i` in the main array.
+    fn mark(&self, i: usize, c: &Colors) -> Mark {
+        if let Some(t) = self.sweep {
+            // The closing sweep: a bright front running left to right.
+            let front = (t / SWEEP_SECONDS * self.initial.len() as f32) as usize;
+            if i == front {
+                return Mark::Active(c.swap);
+            }
+            return Mark::Sorted(c.sorted);
+        }
         let s = &self.state;
         let active = match s.last {
             Some(Op::Swap(a, b)) if i == a || i == b => Some(c.swap),
@@ -255,28 +420,56 @@ impl SortVisualizer {
             _ => None,
         };
         if let Some(col) = active {
-            return col;
+            return Mark::Active(col);
         }
         if s.pivot == Some(i) {
-            return c.pivot;
+            return Mark::Active(c.pivot);
         }
         if s.min == Some(i) {
-            return c.min;
+            return Mark::Active(c.min);
         }
         if s.sorted.get(i).copied().unwrap_or(false) {
-            return c.sorted;
+            return Mark::Sorted(c.sorted);
         }
         if let Some((lo, hi, _)) = s.stack.last().copied().or(s.range)
             && (i < lo || i >= hi)
         {
-            return c.faded;
+            return Mark::Faded;
         }
         if let Some(h) = s.heap_size
             && i >= h
         {
-            return c.faded;
+            return Mark::Faded;
         }
-        c.idle
+        Mark::Idle
+    }
+
+    fn bar_color(&self, i: usize, c: &Colors) -> Color32 {
+        c.of(self.mark(i, c))
+    }
+
+    /// The value an op touches, for choosing a pitch.
+    fn sounded_value(&self, op: Op) -> Option<u32> {
+        let a = &self.state.a;
+        match op {
+            Op::Compare(i, _) | Op::Swap(i, _) | Op::Count(i) | Op::Place { from: i, .. } => {
+                a.get(i).copied()
+            }
+            Op::Write(_, v) => Some(v),
+            Op::CompareKey(_) => self.state.key.map(|(k, _)| k),
+            _ => None,
+        }
+    }
+
+    /// Play the pitch of a value, at most about forty tones a second.
+    fn sound(&mut self, value: u32, seconds: f32) {
+        if self.tone_cooldown > 0.0 {
+            return;
+        }
+        let max = self.initial.iter().copied().max().unwrap_or(1).max(1);
+        let hz = audio::frequency(value as f32 / max as f32);
+        self.session.audio.borrow_mut().tone(hz, seconds);
+        self.tone_cooldown = 1.0 / 40.0;
     }
 }
 
@@ -372,14 +565,33 @@ impl Formula for SortVisualizer {
 
     fn paint(&mut self, painter: &egui::Painter, rect: Rect, palette: &Palette, dt: f32) {
         self.sync();
+        self.tone_cooldown -= dt;
         if self.playing && !self.done() {
             self.carry += self.speed * dt;
             let steps = self.carry.floor() as usize;
             self.carry -= steps as f32;
             self.seek(self.cursor + steps);
+            if steps > 0
+                && let Some(v) = self.state.last.and_then(|op| self.sounded_value(op))
+            {
+                self.sound(v, (2.0 / self.speed).clamp(0.05, 0.18));
+            }
+            if self.done() && !self.initial.is_empty() {
+                self.sweep = Some(0.0);
+            }
         }
         if self.done() {
             self.playing = false;
+        }
+        if let Some(t) = self.sweep {
+            let n = self.initial.len();
+            let before = (t / SWEEP_SECONDS * n as f32) as usize;
+            let t = t + dt;
+            let after = (t / SWEEP_SECONDS * n as f32) as usize;
+            if after != before && after < n {
+                self.sound(self.state.a[after], 0.08);
+            }
+            self.sweep = (after <= n).then_some(t);
         }
 
         let colors = Colors::new(palette);
@@ -419,36 +631,35 @@ impl Formula for SortVisualizer {
         );
 
         // Main array; insertion sort's hole shows the lifted key instead.
+        let skin = self.session.view.borrow().skin;
         let mut values: Vec<Option<u32>> = s.a.iter().map(|&v| Some(v)).collect();
-        if let Some((key, hole)) = s.key {
+        let ghost = s.key.map(|(key, hole)| {
             values[hole] = None;
-            let slot = main.width() / n.max(1) as f32;
-            let h = key as f32 / max as f32 * main.height();
-            let x0 = slot_x(main, n, hole as f32);
-            let ghost = Rect::from_min_max(
-                pos2(x0 + slot * 0.1, main.bottom() - h),
-                pos2(x0 + slot * 0.9, main.bottom()),
-            );
             let edge = if matches!(s.last, Some(Op::CompareKey(_))) {
                 colors.compare
             } else {
                 colors.min
             };
-            painter.rect(
-                ghost,
-                1.5,
-                colors.min.gamma_multiply(0.25),
-                Stroke::new(2.0, edge),
-                egui::StrokeKind::Inside,
-            );
-        }
-        bars(
+            (hole, key, edge)
+        });
+        let swapped = match s.last {
+            Some(Op::Swap(a, b)) => Some((a, b, colors.swap)),
+            _ => None,
+        };
+        let marks = |i: usize| self.mark(i, &colors);
+        skin::draw(
             painter,
             main,
-            &values,
-            max,
-            |i| self.bar_color(i, &colors),
-            palette.rule,
+            skin,
+            &skin::Frame {
+                values: &values,
+                max,
+                marks: &marks,
+                idle: colors.idle,
+                empty: palette.rule,
+                ghost,
+                swapped,
+            },
         );
 
         // One bracket row per open recursive call, outermost on top: the list
@@ -458,7 +669,7 @@ impl Formula for SortVisualizer {
             (true, Some(r)) => vec![r],
             _ => s.stack.clone(),
         };
-        let max_rows = 7;
+        let max_rows = if skin == Skin::Radial { 0 } else { 7 };
         let skip = rows.len().saturating_sub(max_rows);
         for (depth, &(lo, hi, mid)) in rows.iter().enumerate().skip(skip) {
             let y = main.bottom() + 7.0 + 5.0 * (depth - skip) as f32;
@@ -516,44 +727,37 @@ impl Formula for SortVisualizer {
     }
 
     fn controls(&mut self, ui: &mut egui::Ui, palette: &Palette) {
-        // The shared list.
-        {
-            let mut data = self.data.borrow_mut();
-            let mut changed = false;
-            egui::Grid::new("sort-data")
-                .num_columns(2)
-                .spacing([12.0, 10.0])
-                .show(ui, |ui| {
-                    ui.label("List size");
-                    changed |= ui.add(egui::Slider::new(&mut data.n, 5..=200)).changed();
-                    ui.end_row();
-                    ui.label("Data");
-                    ui.horizontal_wrapped(|ui| {
-                        for d in Distribution::ALL {
-                            if ui.selectable_label(data.dist == d, d.label()).clicked() {
-                                data.dist = d;
-                                changed = true;
-                            }
-                        }
-                    });
-                    ui.end_row();
-                });
-            if changed {
-                data.regenerate();
+        self.session.data_controls(ui, palette);
+        self.sync();
+        ui.add_space(10.0);
+        self.session.view_controls(ui, palette);
+
+        // Space plays or pauses; the arrow keys step, while no text field has focus.
+        if ui.ctx().memory(|m| m.focused().is_none()) {
+            let (space, left, right) = ui.input(|i| {
+                (
+                    i.key_pressed(egui::Key::Space),
+                    i.key_pressed(egui::Key::ArrowLeft),
+                    i.key_pressed(egui::Key::ArrowRight),
+                )
+            });
+            if space {
+                if self.done() {
+                    self.seek(0);
+                    self.playing = true;
+                } else {
+                    self.playing = !self.playing;
+                }
+            }
+            if left && self.cursor > 0 {
+                self.playing = false;
+                self.seek(self.cursor - 1);
+            }
+            if right && !self.done() {
+                self.playing = false;
+                self.seek(self.cursor + 1);
             }
         }
-        ui.add_space(6.0);
-        ui.horizontal_wrapped(|ui| {
-            if ui.button("Randomize list").clicked() {
-                self.data.borrow_mut().shuffle();
-            }
-            ui.label(
-                egui::RichText::new("shared by every sorting page")
-                    .small()
-                    .color(palette.muted),
-            );
-        });
-        self.sync();
 
         // The player.
         ui.add_space(10.0);
@@ -634,6 +838,11 @@ impl Formula for SortVisualizer {
                 ui.add_space(8.0);
             }
         });
+        ui.label(
+            egui::RichText::new("Keys: Space play / pause, Left and Right arrows step")
+                .small()
+                .color(palette.muted),
+        );
     }
 
     fn details(&mut self, ui: &mut egui::Ui, palette: &Palette) {
@@ -794,11 +1003,13 @@ impl SortVisualizer {
 
 /// One page per algorithm, all sharing a single dataset.
 pub fn pages() -> Vec<Box<dyn Formula>> {
-    let data = data::shared();
-    Algorithm::ALL
+    let session = Session::new();
+    let mut pages: Vec<Box<dyn Formula>> = Algorithm::ALL
         .into_iter()
-        .map(|alg| Box::new(SortVisualizer::new(alg, data.clone())) as Box<dyn Formula>)
-        .collect()
+        .map(|alg| Box::new(SortVisualizer::new(alg, session.clone())) as Box<dyn Formula>)
+        .collect();
+    pages.push(Box::new(race::Race::new(session)));
+    pages
 }
 
 #[cfg(test)]
@@ -807,9 +1018,10 @@ mod tests {
 
     #[test]
     fn pages_share_data_and_resync() {
-        let data = data::shared();
-        let mut bubble = SortVisualizer::new(Algorithm::Bubble, data.clone());
-        let mut quick = SortVisualizer::new(Algorithm::Quick, data.clone());
+        let session = Session::new();
+        let data = session.data.clone();
+        let mut bubble = SortVisualizer::new(Algorithm::Bubble, session.clone());
+        let mut quick = SortVisualizer::new(Algorithm::Quick, session.clone());
         assert_eq!(bubble.initial, quick.initial);
         data.borrow_mut().shuffle();
         bubble.sync();
@@ -820,7 +1032,7 @@ mod tests {
 
     #[test]
     fn seeking_backwards_matches_forwards() {
-        let mut v = SortVisualizer::new(Algorithm::Heap, data::shared());
+        let mut v = SortVisualizer::new(Algorithm::Heap, Session::new());
         let total = v.ops.len();
         v.seek(total / 2);
         let middle = v.state.a.clone();
