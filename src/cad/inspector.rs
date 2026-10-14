@@ -6,14 +6,15 @@ use std::collections::HashMap;
 use egui::{Color32, Frame, Margin, RichText, ScrollArea, Stroke, TextEdit};
 
 use super::canvas::{Mode, Request, Workspace};
-use super::export;
 use super::highlight;
 use super::icons::{self, Ui as Icon};
 use super::markdown::{self, Block};
 use super::theme::{Chrome, mono};
+use super::{export, notebook};
 use crate::content::{self, Lang};
 use crate::formula::{Formula, Palette};
 use crate::formulas::{Tool, ToolEnv};
+use crate::latex;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Tab {
@@ -205,7 +206,7 @@ impl Inspector {
                 ),
             },
             Tab::Code => match tool {
-                Some(t) => self.code(ui, t, chrome, now),
+                Some(t) => self.code(ui, ws, t, chrome, now),
                 None => hint(
                     ui,
                     chrome,
@@ -474,7 +475,14 @@ impl Inspector {
             });
     }
 
-    fn code(&mut self, ui: &mut egui::Ui, tool: &'static Tool, chrome: &Chrome, now: f64) {
+    fn code(
+        &mut self,
+        ui: &mut egui::Ui,
+        ws: &Workspace,
+        tool: &'static Tool,
+        chrome: &Chrome,
+        now: f64,
+    ) {
         Frame::new()
             .inner_margin(Margin::symmetric(10, 8))
             .show(ui, |ui| {
@@ -509,13 +517,11 @@ impl Inspector {
                     }
                     if icon_text_button(ui, Icon::Download, export::SAVE_LABEL, chrome).clicked() {
                         self.notice = Some((
-                            match export::save(tool.id, self.lang.file_name(), src) {
-                                Ok(path) if cfg!(target_arch = "wasm32") => {
-                                    format!("Downloaded {path}")
-                                }
-                                Ok(path) => format!("Saved {path}"),
-                                Err(e) => format!("Could not save: {e}"),
-                            },
+                            export::saved_message(export::save(
+                                tool.id,
+                                self.lang.file_name(),
+                                src,
+                            )),
                             now,
                         ));
                     }
@@ -525,6 +531,44 @@ impl Inspector {
                             .font(mono(10.5))
                             .color(chrome.text_dim),
                     );
+                });
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new("Also export")
+                            .font(mono(10.5))
+                            .color(chrome.text_dim),
+                    );
+                    if icon_text_button(ui, Icon::Copy, "LaTeX", chrome)
+                        .on_hover_text(
+                            "The equations with the current values, for a paper or notes",
+                        )
+                        .clicked()
+                        && let Some(f) = self.context_formula(ws)
+                    {
+                        let tex = latex::latex_snippet(f);
+                        export::copy(ui.ctx(), &tex);
+                        self.notice = Some(("Copied the LaTeX to the clipboard".into(), now));
+                    }
+                    if icon_text_button(ui, Icon::Download, "Notebook", chrome)
+                        .on_hover_text(
+                            "A Jupyter notebook: overview, equations and the Python code",
+                        )
+                        .clicked()
+                    {
+                        let nb = self
+                            .context_formula(ws)
+                            .and_then(|f| notebook::for_formula(tool.id, f));
+                        let msg = match nb {
+                            Some(nb) => export::saved_message(export::save(
+                                tool.id,
+                                notebook::FILE_NAME,
+                                &nb,
+                            )),
+                            None => "No notebook export for this tool".into(),
+                        };
+                        self.notice = Some((msg, now));
+                    }
                 });
                 if let Some((msg, at)) = &self.notice {
                     let age = (now - at) as f32;

@@ -3,6 +3,13 @@
 
 use serde_json::{Value, json};
 
+use crate::content::{self, Lang};
+use crate::formula::Formula;
+use crate::latex::latex_snippet;
+
+/// The exported file's name (saved per tool, like the code exports).
+pub const FILE_NAME: &str = "notebook.ipynb";
+
 /// Every exported script animates with matplotlib; ipympl makes that a live
 /// widget inside the notebook.
 const SETUP: &str = "%pip install -q numpy matplotlib ipympl\n%matplotlib widget\n";
@@ -24,6 +31,14 @@ pub fn notebook(doc_md: &str, latex: &str, python: &str) -> String {
         "nbformat_minor": 5,
     });
     serde_json::to_string_pretty(&nb).unwrap_or_default()
+}
+
+/// The notebook for tool `id`, with the equations at `formula`'s current
+/// parameter values. `None` if the tool has no docs or Python export.
+pub fn for_formula(id: &str, formula: &dyn Formula) -> Option<String> {
+    let doc = content::doc(id)?;
+    let python = content::code(id, Lang::Python)?;
+    Some(notebook(doc, &latex_snippet(formula), python))
 }
 
 /// The doc's title and its sections up to (not including) "Intuition".
@@ -57,7 +72,6 @@ fn lines(text: &str) -> Vec<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::content::{self, Lang};
     use crate::formulas::{TOOLS, ToolEnv};
     use serde_json::Value;
 
@@ -143,6 +157,15 @@ mod tests {
                 tool.id
             );
         }
+    }
+
+    #[test]
+    fn notebook_for_a_formula_uses_its_live_parameters() {
+        let tool = crate::formulas::tool("lorenz").unwrap();
+        let f = (tool.make)(&ToolEnv::new());
+        let nb = parse(&for_formula(tool.id, &*f).unwrap());
+        assert!(source(&nb["cells"][0]).starts_with("# Lorenz"));
+        assert!(source(&nb["cells"][1]).contains("\\sigma = 10"));
     }
 
     /// The setup cell relies on every script showing its figure with
