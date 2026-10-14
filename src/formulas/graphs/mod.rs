@@ -2,6 +2,7 @@
 
 pub mod grid;
 pub mod path;
+pub mod pathfinding;
 
 use std::cell::RefCell;
 use std::rc::Rc;

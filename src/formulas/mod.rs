@@ -42,6 +42,7 @@ pub const ANIMATION: &str = "Animation & Easing";
 pub const COLOR: &str = "Color & Accessibility";
 pub const LINEAR_ALGEBRA: &str = "Linear Algebra";
 pub const SORTING: &str = "Sorting";
+pub const GRAPHS: &str = "Graphs & Trees";
 
 /// Shown on first launch, before a choice has been remembered.
 pub const DEFAULT_ID: &str = "fourier-epicycles";
@@ -94,6 +95,13 @@ fn new<T: Formula + Default + 'static>(_: &ToolEnv) -> Box<dyn Formula> {
 fn sort<const A: usize>(env: &ToolEnv) -> Box<dyn Formula> {
     let alg = sorting::algorithms::Algorithm::ALL[A];
     Box::new(sorting::SortVisualizer::new(alg, env.sorting.clone()))
+}
+
+fn path<const S: usize>(env: &ToolEnv) -> Box<dyn Formula> {
+    Box::new(graphs::pathfinding::Pathfinding::new(
+        graphs::path::Search::ALL[S],
+        env.graphs.clone(),
+    ))
 }
 
 fn race(env: &ToolEnv) -> Box<dyn Formula> {
@@ -274,6 +282,7 @@ pub static TOOLS: &[Tool] = &[
     tool!("heap-sort", "Heap sort", SORTING, "HEP", sort::<6>),
     tool!("counting-sort", "Counting sort", SORTING, "CNT", sort::<7>),
     tool!("sorting-race", "Sorting race", SORTING, "RCE", race),
+    tool!("bfs", "Breadth-first search", GRAPHS, "BFS", path::<0>),
 ];
 
 /// The tool with this id.

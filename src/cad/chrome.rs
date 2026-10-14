@@ -56,6 +56,7 @@ fn short(category: &str) -> &'static str {
         formulas::ANIMATION => "Easing",
         formulas::COLOR => "Color",
         formulas::SORTING => "Sorting",
+        formulas::GRAPHS => "Graphs",
         _ => "Other",
     }
 }

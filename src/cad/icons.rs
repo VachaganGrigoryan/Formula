@@ -314,6 +314,30 @@ pub fn tool(painter: &Painter, rect: Rect, id: &str, color: Color32) {
                 .collect();
             painter.add(Shape::convex_polygon(pts, color, Stroke::NONE));
         }
+        "bfs" => {
+            // A 3x3 dot grid with rings spreading from the left-middle dot.
+            for (x, y) in [
+                (0.5, 0.18),
+                (0.5, 0.5),
+                (0.5, 0.82),
+                (0.84, 0.18),
+                (0.84, 0.5),
+                (0.84, 0.82),
+            ] {
+                p.dot(x, y, 0.05);
+            }
+            p.dot(0.16, 0.18, 0.05);
+            p.dot(0.16, 0.5, 0.08);
+            p.dot(0.16, 0.82, 0.05);
+            p.curve(16, |t| {
+                let a = -PI / 2.0 + t * PI;
+                (0.16 + 0.2 * a.cos(), 0.5 + 0.2 * a.sin())
+            });
+            p.curve(16, |t| {
+                let a = -PI / 2.0 + t * PI;
+                (0.16 + 0.34 * a.cos(), 0.5 + 0.34 * a.sin())
+            });
+        }
         "bubble-sort" => p.bars(&[0.3, 0.55, 0.45, 0.8, 1.0], &[1, 2]),
         "selection-sort" => {
             p.bars(&[0.25, 0.5, 0.9, 0.15, 0.7], &[3]);
