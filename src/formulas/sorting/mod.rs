@@ -15,6 +15,7 @@ use egui::{Align2, Color32, FontId, Pos2, Rect, Stroke, pos2, vec2};
 
 use crate::audio::{self, Audio};
 use crate::formula::{Formula, MathText, Palette, Tone, fit_text};
+use crate::formulas::replay::{self, Player};
 use algorithms::{Algorithm, Op, State};
 use data::{Distribution, Shared};
 use skin::{Mark, Skin};
@@ -321,15 +322,7 @@ pub struct SortVisualizer {
     /// The dataset generation the recording was made from.
     generation: u64,
     initial: Vec<u32>,
-    ops: Vec<Op>,
-    state: State,
-    /// Number of ops applied to `state`.
-    cursor: usize,
-    playing: bool,
-    /// Steps per second.
-    speed: f32,
-    /// Fractional steps carried between frames.
-    carry: f32,
+    player: Player<State>,
     /// Seconds until another tone may play.
     tone_cooldown: f32,
     /// The closing sweep across the sorted list, in seconds since it began.
@@ -347,12 +340,7 @@ impl SortVisualizer {
             session,
             generation: u64::MAX,
             initial: Vec::new(),
-            ops: Vec::new(),
-            state: State::default(),
-            cursor: 0,
-            playing: true,
-            speed: 30.0,
-            carry: 0.0,
+            player: Player::new(State::default(), Vec::new(), 30.0),
             tone_cooldown: 0.0,
             sweep: None,
         };
@@ -369,31 +357,22 @@ impl SortVisualizer {
         self.generation = data.generation();
         self.initial = data.values().to_vec();
         drop(data);
-        self.ops = self.alg.record(&self.initial).ops;
-        self.state = State::new(&self.initial);
-        self.cursor = 0;
-        self.carry = 0.0;
+        self.player.reset(
+            State::new(&self.initial),
+            self.alg.record(&self.initial).ops,
+        );
         self.sweep = None;
-        self.playing = true;
         // Aim for a run of about fifteen seconds at the default speed.
-        self.speed = (self.ops.len() as f32 / 15.0).clamp(4.0, 3000.0);
+        self.player.speed = (self.player.ops.len() as f32 / 15.0).clamp(4.0, 3000.0);
     }
 
     /// Move to step `k`, replaying from the start when going backwards.
     fn seek(&mut self, k: usize) {
-        let k = k.min(self.ops.len());
-        if k < self.cursor {
-            self.state = State::new(&self.initial);
-            self.cursor = 0;
-        }
-        while self.cursor < k {
-            self.state.apply(self.ops[self.cursor]);
-            self.cursor += 1;
-        }
+        self.player.seek(k);
     }
 
     fn done(&self) -> bool {
-        self.cursor >= self.ops.len()
+        self.player.done()
     }
 
     fn uses_tree(&self) -> bool {
@@ -410,7 +389,7 @@ impl SortVisualizer {
             }
             return Mark::Sorted(c.sorted);
         }
-        let s = &self.state;
+        let s = &self.player.state;
         let active = match s.last {
             Some(Op::Swap(a, b)) if i == a || i == b => Some(c.swap),
             Some(Op::Write(a, _)) if i == a => Some(c.swap),
@@ -450,13 +429,13 @@ impl SortVisualizer {
 
     /// The value an op touches, for choosing a pitch.
     fn sounded_value(&self, op: Op) -> Option<u32> {
-        let a = &self.state.a;
+        let a = &self.player.state.a;
         match op {
             Op::Compare(i, _) | Op::Swap(i, _) | Op::Count(i) | Op::Place { from: i, .. } => {
                 a.get(i).copied()
             }
             Op::Write(_, v) => Some(v),
-            Op::CompareKey(_) => self.state.key.map(|(k, _)| k),
+            Op::CompareKey(_) => self.player.state.key.map(|(k, _)| k),
             _ => None,
         }
     }
@@ -571,22 +550,15 @@ impl Formula for SortVisualizer {
     fn paint(&mut self, painter: &egui::Painter, rect: Rect, palette: &Palette, dt: f32) {
         self.sync();
         self.tone_cooldown -= dt;
-        if self.playing && !self.done() {
-            self.carry += self.speed * dt;
-            let steps = self.carry.floor() as usize;
-            self.carry -= steps as f32;
-            self.seek(self.cursor + steps);
-            if steps > 0
-                && let Some(v) = self.state.last.and_then(|op| self.sounded_value(op))
-            {
-                self.sound(v, (2.0 / self.speed).clamp(0.05, 0.18));
-            }
-            if self.done() && !self.initial.is_empty() {
-                self.sweep = Some(0.0);
-            }
+        let was_done = self.done();
+        let steps = self.player.advance(dt);
+        if steps > 0
+            && let Some(v) = self.player.state.last.and_then(|op| self.sounded_value(op))
+        {
+            self.sound(v, (2.0 / self.player.speed).clamp(0.05, 0.18));
         }
-        if self.done() {
-            self.playing = false;
+        if !was_done && self.done() && !self.initial.is_empty() {
+            self.sweep = Some(0.0);
         }
         if let Some(t) = self.sweep {
             let n = self.initial.len();
@@ -594,7 +566,7 @@ impl Formula for SortVisualizer {
             let t = t + dt;
             let after = (t / SWEEP_SECONDS * n as f32) as usize;
             if after != before && after < n {
-                self.sound(self.state.a[after], 0.08);
+                self.sound(self.player.state.a[after], 0.08);
             }
             self.sweep = (after <= n).then_some(t);
         }
@@ -603,10 +575,10 @@ impl Formula for SortVisualizer {
         let n = self.initial.len();
         let max = self.initial.iter().copied().max().unwrap_or(1);
         let inner = rect.shrink2(vec2(18.0, 14.0));
-        let s = &self.state;
+        let s = &self.player.state;
 
         let mut fields = vec![
-            format!("step {} / {}", self.cursor, self.ops.len()),
+            format!("step {} / {}", self.player.cursor, self.player.ops.len()),
             format!("comparisons {}", s.comparisons),
             format!("swaps {}", s.swaps),
             format!("writes {}", s.writes),
@@ -725,30 +697,7 @@ impl Formula for SortVisualizer {
 
     /// Space plays or pauses; the arrow keys step back and forward.
     fn handle_keys(&mut self, ctx: &egui::Context) {
-        let none = egui::Modifiers::NONE;
-        let (space, left, right) = ctx.input_mut(|i| {
-            (
-                i.consume_key(none, egui::Key::Space),
-                i.consume_key(none, egui::Key::ArrowLeft),
-                i.consume_key(none, egui::Key::ArrowRight),
-            )
-        });
-        if space {
-            if self.done() {
-                self.seek(0);
-                self.playing = true;
-            } else {
-                self.playing = !self.playing;
-            }
-        }
-        if left && self.cursor > 0 {
-            self.playing = false;
-            self.seek(self.cursor - 1);
-        }
-        if right && !self.done() {
-            self.playing = false;
-            self.seek(self.cursor + 1);
-        }
+        replay::transport_keys(ctx, &mut self.player);
     }
 
     fn controls(&mut self, ui: &mut egui::Ui, palette: &Palette) {
@@ -757,74 +706,8 @@ impl Formula for SortVisualizer {
         ui.add_space(10.0);
         self.session.view_controls(ui, palette);
 
-        // The player.
         ui.add_space(10.0);
-        egui::Grid::new("sort-player")
-            .num_columns(2)
-            .spacing([12.0, 10.0])
-            .show(ui, |ui| {
-                ui.label("Speed");
-                ui.add(
-                    egui::Slider::new(&mut self.speed, 1.0..=5000.0)
-                        .logarithmic(true)
-                        .suffix(" steps/s")
-                        .custom_formatter(|v, _| format!("{v:.0}")),
-                );
-                ui.end_row();
-                ui.label("Step");
-                let mut k = self.cursor;
-                if ui
-                    .add(egui::Slider::new(&mut k, 0..=self.ops.len()))
-                    .changed()
-                {
-                    self.playing = false;
-                    self.seek(k);
-                }
-                ui.end_row();
-            });
-        ui.add_space(6.0);
-        ui.horizontal_wrapped(|ui| {
-            if ui.button("Restart").clicked() {
-                self.seek(0);
-                self.playing = true;
-            }
-            if ui
-                .add_enabled(self.cursor > 0, egui::Button::new("Step back"))
-                .clicked()
-            {
-                self.playing = false;
-                self.seek(self.cursor - 1);
-            }
-            let label = if self.playing {
-                "Pause"
-            } else if self.done() {
-                "Replay"
-            } else {
-                "Play"
-            };
-            if ui.button(label).clicked() {
-                if self.done() {
-                    self.seek(0);
-                    self.playing = true;
-                } else {
-                    self.playing = !self.playing;
-                }
-            }
-            if ui
-                .add_enabled(!self.done(), egui::Button::new("Step"))
-                .clicked()
-            {
-                self.playing = false;
-                self.seek(self.cursor + 1);
-            }
-            if ui
-                .add_enabled(!self.done(), egui::Button::new("Finish"))
-                .clicked()
-            {
-                self.playing = false;
-                self.seek(self.ops.len());
-            }
-        });
+        replay::transport(ui, &mut self.player, 5000.0);
 
         ui.add_space(10.0);
         let colors = Colors::new(palette);
@@ -875,7 +758,7 @@ impl SortVisualizer {
         c: &Colors,
         palette: &Palette,
     ) {
-        let s = &self.state;
+        let s = &self.player.state;
         let font = FontId::proportional(12.0);
         let hist = Rect::from_min_max(
             pos2(inner.left(), main.bottom() + 30.0),
@@ -959,7 +842,7 @@ impl SortVisualizer {
 
     /// The heap drawn as a binary tree: node i has children 2i + 1 and 2i + 2.
     fn paint_tree(&self, painter: &egui::Painter, area: Rect, c: &Colors, palette: &Palette) {
-        let n = self.state.a.len();
+        let n = self.player.state.a.len();
         if n == 0 {
             return;
         }
@@ -972,7 +855,7 @@ impl SortVisualizer {
             let x = area.left() + area.width() * ((i - first) as f32 + 0.5) / width as f32;
             pos2(x, area.top() + row_h * (level as f32 + 0.5))
         };
-        let in_heap = |i: usize| self.state.heap_size.is_some_and(|h| i < h);
+        let in_heap = |i: usize| self.player.state.heap_size.is_some_and(|h| i < h);
         for i in 1..n {
             let parent = (i - 1) / 2;
             let stroke = if in_heap(i) {
@@ -990,7 +873,7 @@ impl SortVisualizer {
                 painter.text(
                     pos(i),
                     Align2::CENTER_CENTER,
-                    self.state.a[i].to_string(),
+                    self.player.state.a[i].to_string(),
                     FontId::proportional(radius * 0.95),
                     palette.card,
                 );
@@ -1044,13 +927,13 @@ mod tests {
     #[test]
     fn seeking_backwards_matches_forwards() {
         let mut v = SortVisualizer::new(Algorithm::Heap, Session::new());
-        let total = v.ops.len();
+        let total = v.player.ops.len();
         v.seek(total / 2);
-        let middle = v.state.a.clone();
+        let middle = v.player.state.a.clone();
         v.seek(total);
-        assert!(v.state.a.windows(2).all(|w| w[0] <= w[1]));
+        assert!(v.player.state.a.windows(2).all(|w| w[0] <= w[1]));
         v.seek(total / 2);
-        assert_eq!(v.state.a, middle);
-        assert_eq!(v.cursor, total / 2);
+        assert_eq!(v.player.state.a, middle);
+        assert_eq!(v.player.cursor, total / 2);
     }
 }

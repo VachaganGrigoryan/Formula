@@ -21,6 +21,7 @@ pub mod normalize;
 pub mod polar;
 pub mod projection;
 pub mod regression;
+pub mod replay;
 pub mod rotation;
 pub mod sorting;
 pub mod voronoi;
