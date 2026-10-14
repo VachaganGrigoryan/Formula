@@ -201,10 +201,18 @@ impl Formula for Lissajous {
             .spacing([12.0, 10.0])
             .show(ui, |ui| {
                 ui.label("A");
-                ui.add(egui::Slider::new(&mut self.amp_x, 0.1..=1.0).step_by(0.05));
+                ui.add(
+                    egui::Slider::new(&mut self.amp_x, 0.1..=1.0)
+                        .step_by(0.05)
+                        .clamping(egui::SliderClamping::Edits),
+                );
                 ui.end_row();
                 ui.label("B");
-                ui.add(egui::Slider::new(&mut self.amp_y, 0.1..=1.0).step_by(0.05));
+                ui.add(
+                    egui::Slider::new(&mut self.amp_y, 0.1..=1.0)
+                        .step_by(0.05)
+                        .clamping(egui::SliderClamping::Edits),
+                );
                 ui.end_row();
                 ui.label("a");
                 ui.add(egui::Slider::new(&mut self.a, 1..=9));
@@ -216,6 +224,7 @@ impl Formula for Lissajous {
                 ui.add(
                     egui::Slider::new(&mut self.delta, 0.0..=2.0)
                         .step_by(0.01)
+                        .clamping(egui::SliderClamping::Edits)
                         .suffix(" π"),
                 );
                 ui.end_row();
@@ -229,6 +238,7 @@ impl Formula for Lissajous {
                         self.drift,
                         egui::Slider::new(&mut self.drift_rate, 0.01..=0.3)
                             .step_by(0.01)
+                            .clamping(egui::SliderClamping::Edits)
                             .suffix(" π/s"),
                     );
                 });
@@ -253,6 +263,29 @@ impl Formula for Lissajous {
 mod tests {
     use super::*;
     use crate::latex::latex_snippet;
+
+    /// With drift on, δ keeps moving while the controls are on screen.
+    #[test]
+    fn drift_advances_while_the_controls_are_shown() {
+        let mut f = Lissajous::default();
+        let start = f.delta;
+        let ctx = egui::Context::default();
+        let palette = Palette::dark();
+        for _ in 0..120 {
+            let mut out = ctx.run_ui(Default::default(), |ui| {
+                let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(640.0, 480.0));
+                f.paint(ui.painter(), rect, &palette, 1.0 / 60.0);
+                f.controls(ui, &palette);
+            });
+            out.textures_delta.clear();
+        }
+        // Two seconds at 0.05 π/s.
+        assert!(
+            (f.delta - start - 0.1).abs() < 0.01,
+            "δ went {start} → {}",
+            f.delta
+        );
+    }
 
     #[test]
     fn snippet_follows_the_sliders() {

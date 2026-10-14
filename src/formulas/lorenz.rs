@@ -391,18 +391,31 @@ impl Formula for Lorenz {
             .spacing([12.0, 10.0])
             .show(ui, |ui| {
                 ui.label("σ");
-                ui.add(egui::Slider::new(&mut self.params.sigma, 0.5..=20.0).step_by(0.1));
+                ui.add(
+                    egui::Slider::new(&mut self.params.sigma, 0.5..=20.0)
+                        .step_by(0.1)
+                        .clamping(egui::SliderClamping::Edits),
+                );
                 ui.end_row();
                 ui.label("ρ");
-                ui.add(egui::Slider::new(&mut self.params.rho, 0.5..=60.0).step_by(0.1));
+                ui.add(
+                    egui::Slider::new(&mut self.params.rho, 0.5..=60.0)
+                        .step_by(0.1)
+                        .clamping(egui::SliderClamping::Edits),
+                );
                 ui.end_row();
                 ui.label("β");
-                ui.add(egui::Slider::new(&mut self.params.beta, 0.1..=6.0).step_by(0.01));
+                ui.add(
+                    egui::Slider::new(&mut self.params.beta, 0.1..=6.0)
+                        .step_by(0.01)
+                        .clamping(egui::SliderClamping::Edits),
+                );
                 ui.end_row();
                 ui.label("Speed");
                 ui.add(
                     egui::Slider::new(&mut self.speed, 0.05..=3.0)
                         .step_by(0.05)
+                        .clamping(egui::SliderClamping::Edits)
                         .suffix(" t/s"),
                 );
                 ui.end_row();

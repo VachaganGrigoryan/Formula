@@ -481,7 +481,11 @@ impl Formula for FlowField {
                 );
                 ui.end_row();
                 ui.label("Turns k");
-                ui.add(egui::Slider::new(&mut self.turns, 0.25..=4.0).step_by(0.05));
+                ui.add(
+                    egui::Slider::new(&mut self.turns, 0.25..=4.0)
+                        .step_by(0.05)
+                        .clamping(egui::SliderClamping::Edits),
+                );
                 ui.end_row();
                 ui.label("Speed v");
                 ui.add(egui::Slider::new(&mut self.speed, 10.0..=240.0).suffix(" px/s"));
@@ -494,7 +498,11 @@ impl Formula for FlowField {
                 );
                 ui.end_row();
                 ui.label("Field change");
-                ui.add(egui::Slider::new(&mut self.evolve, 0.0..=0.5).step_by(0.01));
+                ui.add(
+                    egui::Slider::new(&mut self.evolve, 0.0..=0.5)
+                        .step_by(0.01)
+                        .clamping(egui::SliderClamping::Edits),
+                );
                 ui.end_row();
                 ui.label("Color");
                 ui.horizontal(|ui| {
