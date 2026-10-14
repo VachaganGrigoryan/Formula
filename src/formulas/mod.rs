@@ -10,6 +10,7 @@ pub mod easing;
 pub mod flowfield;
 pub mod force;
 pub mod fourier;
+pub mod graphs;
 pub mod lerp;
 pub mod life;
 pub mod lissajous;
@@ -50,12 +51,15 @@ pub struct ToolEnv {
     /// One sorting session per board, so every sorting viewport works on the
     /// same list and shares one audio output.
     pub sorting: sorting::Session,
+    /// One pathfinding grid per board, shared by the graph tools.
+    pub graphs: graphs::Session,
 }
 
 impl ToolEnv {
     pub fn new() -> Self {
         Self {
             sorting: sorting::Session::new(),
+            graphs: graphs::Session::new(),
         }
     }
 }
