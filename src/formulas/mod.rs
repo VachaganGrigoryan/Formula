@@ -16,6 +16,7 @@ pub mod lissajous;
 pub mod lorenz;
 pub mod luminance;
 pub mod mandelbrot;
+pub mod matrix;
 pub mod normalize;
 pub mod polar;
 pub mod projection;
@@ -37,6 +38,7 @@ pub const GEOMETRY: &str = "Geometry & Spatial Analysis";
 pub const STATISTICS: &str = "Statistics & Trend Analysis";
 pub const ANIMATION: &str = "Animation & Easing";
 pub const COLOR: &str = "Color & Accessibility";
+pub const LINEAR_ALGEBRA: &str = "Linear Algebra";
 pub const SORTING: &str = "Sorting";
 
 /// Shown on first launch, before a choice has been remembered.
@@ -211,6 +213,13 @@ pub static TOOLS: &[Tool] = &[
         GEOMETRY,
         "VOR",
         new::<voronoi::Voronoi>
+    ),
+    tool!(
+        "matrix-transform",
+        "Matrix transformation",
+        LINEAR_ALGEBRA,
+        "MAT",
+        new::<matrix::MatrixTransform>
     ),
     tool!(
         "linear-regression",

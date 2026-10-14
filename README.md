@@ -30,6 +30,7 @@ Formulas included, grouped as in the tool library:
 | Geometry & Spatial Analysis | Euclidean distance `d = √((x2 − x1)² + (y2 − y1)²)` | nearest-point tooltip under the mouse; K-means clustering mode |
 | | 2D rotation `x' = x cos θ − y sin θ, y' = x sin θ + y cos θ` | drag the point; tilt crowded axis labels until they stop colliding |
 | | Voronoi diagram `V(pᵢ) = {x : d(x, pᵢ) ≤ d(x, pⱼ) for all j ≠ i}` | drag, add and remove seeds; drift; Lloyd relaxation; Delaunay edges; giraffe, cracked mud and dragonfly-wing styles |
+| Linear Algebra | Matrix transformation `x' = a x + b y, y' = c x + d y` | drag the basis tips; the grid warps; det shading; eigenvectors with their λ; presets morph from the identity; chain up to three matrices |
 | Statistics & Trend Analysis | Line of best fit (least squares) | drag, add and remove points; residuals and squared errors; R² |
 | Animation & Easing | Cubic ease-out `f(t) = 1 − (1 − t)³` | curve and speed plot, linear vs eased race, bars gliding into place |
 | Color & Accessibility | Relative luminance `Y = 0.2126R + 0.7152G + 0.0722B` | heatmap picks black or white text per cell; contrast ratios; WCAG linearization toggle |
