@@ -176,6 +176,14 @@ impl ForceLayout {
 }
 
 impl Formula for ForceLayout {
+    fn params(&self) -> Vec<(&'static str, f64)> {
+        vec![
+            ("k", self.params.k as f64),
+            ("x_0", self.params.rest as f64),
+            ("k_r", self.params.kr as f64),
+        ]
+    }
+
     fn id(&self) -> &'static str {
         "force-layout"
     }

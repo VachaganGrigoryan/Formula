@@ -74,6 +74,10 @@ impl Bezier {
 }
 
 impl Formula for Bezier {
+    fn params(&self) -> Vec<(&'static str, f64)> {
+        vec![("t", self.t as f64)]
+    }
+
     fn id(&self) -> &'static str {
         "cubic-bezier"
     }

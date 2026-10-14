@@ -208,6 +208,12 @@ pub trait Formula {
     /// The equations being visualized, one per line.
     fn equations(&self) -> Vec<MathText>;
 
+    /// The current values of the parameters in the equations, named as they
+    /// appear there (`"θ"`, `"k_r"`; an underscore starts a subscript).
+    fn params(&self) -> Vec<(&'static str, f64)> {
+        Vec::new()
+    }
+
     /// Height of the stage for a given width.
     fn stage_height(&self, width: f32) -> f32 {
         width * 0.75

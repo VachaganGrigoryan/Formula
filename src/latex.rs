@@ -1,6 +1,6 @@
 //! Typesetting the app's equations as LaTeX, for papers, homework and notebooks.
 
-use crate::formula::{MathText, Piece};
+use crate::formula::{Formula, MathText, Piece};
 
 /// The equation as a LaTeX math-mode string (without `$` delimiters).
 pub fn latex_of(eq: &MathText) -> String {
@@ -23,6 +23,61 @@ enum Kind {
     Text,
     Sub,
     Sup,
+}
+
+/// The formula's equations with its current parameter values, as a block
+/// ready to paste into a LaTeX document.
+pub fn latex_snippet(f: &dyn Formula) -> String {
+    snippet(&f.equations(), &f.params())
+}
+
+/// Equations, one per line, then a `where` line with the parameter values.
+pub fn snippet(equations: &[MathText], params: &[(&str, f64)]) -> String {
+    let mut lines: Vec<String> = equations.iter().map(latex_of).collect();
+    if !params.is_empty() {
+        let values: Vec<String> = params
+            .iter()
+            .map(|&(name, v)| format!("{} = {}", param_name(name), number(v)))
+            .collect();
+        lines.push(format!(r"\text{{where }} {}", values.join(r",\ ")));
+    }
+    format!(
+        "\\begin{{gathered}}\n{}\n\\end{{gathered}}",
+        lines.join(" \\\\\n")
+    )
+}
+
+/// `"k_r"` → `k_{r}`: the part after an underscore is a subscript.
+fn param_name(name: &str) -> String {
+    let eq = match name.split_once('_') {
+        Some((base, sub)) => MathText::new().t(base).sub(sub),
+        None => MathText::new().t(name),
+    };
+    latex_of(&eq)
+}
+
+/// A parameter value with at most four significant digits.
+pub fn number(x: f64) -> String {
+    if x == 0.0 || !x.is_finite() {
+        return if x == 0.0 { "0".into() } else { format!("{x}") };
+    }
+    if x.abs() < 1e-4 {
+        let s = format!("{x:.3e}");
+        let (mantissa, exponent) = s.split_once('e').unwrap_or((&s, "0"));
+        return format!(r"{} \times 10^{{{exponent}}}", trim_zeros(mantissa));
+    }
+    let digits = x.abs().log10().floor() as i32 + 1;
+    let decimals = (4 - digits).max(0) as usize;
+    trim_zeros(&format!("{x:.decimals$}")).to_owned()
+}
+
+/// `"2.500"` → `"2.5"`, `"3.000"` → `"3"`.
+fn trim_zeros(s: &str) -> &str {
+    if s.contains('.') {
+        s.trim_end_matches('0').trim_end_matches('.')
+    } else {
+        s
+    }
 }
 
 /// Words typeset upright as LaTeX operators (`\sin`), not as italic letters.
@@ -306,6 +361,83 @@ mod tests {
     #[test]
     fn latex_special_characters_are_escaped() {
         assert_eq!(tex(MathText::new().t("50% & #1")), r"50\% \& \#1");
+    }
+
+    #[test]
+    fn numbers_keep_four_significant_digits() {
+        assert_eq!(number(3.0), "3");
+        assert_eq!(number(28.0), "28");
+        assert_eq!(number(-0.5), "-0.5");
+        assert_eq!(number(8.0 / 3.0), "2.667");
+        assert_eq!(number(0.123456), "0.1235");
+        assert_eq!(number(12345.6), "12346");
+        assert_eq!(number(0.0000012), r"1.2 \times 10^{-6}");
+    }
+
+    #[test]
+    fn snippet_lists_the_parameter_values() {
+        let eqs = [MathText::new().t("y = a x"), MathText::new().t("z = θ")];
+        assert_eq!(
+            snippet(&eqs, &[("a", 2.0), ("k_r", 0.5), ("θ", 1.0)]),
+            "\\begin{gathered}\ny = a x \\\\\nz = \\theta \\\\\n\
+             \\text{where } a = 2,\\ k_{r} = 0.5,\\ \\theta = 1\n\\end{gathered}"
+        );
+    }
+
+    #[test]
+    fn snippet_without_parameters_has_no_where_line() {
+        assert_eq!(
+            snippet(&[MathText::new().t("y = x")], &[]),
+            "\\begin{gathered}\ny = x\n\\end{gathered}"
+        );
+    }
+
+    /// The tools driven by numeric sliders report them, so the LaTeX shows
+    /// the values the viewport is using.
+    #[test]
+    fn slider_tools_report_their_parameters() {
+        let env = ToolEnv::new();
+        for id in [
+            "polar-to-cartesian",
+            "perspective-projection",
+            "lerp",
+            "cubic-bezier",
+            "lissajous",
+            "force-layout",
+            "min-max-normalization",
+            "flow-field",
+            "lorenz",
+            "rotation-matrix",
+            "ease-out-cubic",
+            "relative-luminance",
+        ] {
+            let tool = crate::formulas::tool(id).unwrap();
+            let f = (tool.make)(&env);
+            let params = f.params();
+            assert!(!params.is_empty(), "{id} reports no parameters");
+            let tex = latex_snippet(&*f);
+            for (name, _) in params {
+                let name = snippet(&[], &[(name, 0.0)]);
+                let name = name
+                    .split("where } ")
+                    .nth(1)
+                    .unwrap()
+                    .split(" =")
+                    .next()
+                    .unwrap();
+                assert!(tex.contains(name), "{id}: {name} missing from {tex}");
+            }
+        }
+    }
+
+    #[test]
+    fn every_snippet_is_ascii_and_balanced() {
+        let env = ToolEnv::new();
+        for tool in TOOLS {
+            let tex = latex_snippet(&*(tool.make)(&env));
+            assert!(tex.is_ascii(), "{}: {tex}", tool.id);
+            assert!(balanced(&tex), "{}: {tex}", tool.id);
+        }
     }
 
     fn balanced(s: &str) -> bool {

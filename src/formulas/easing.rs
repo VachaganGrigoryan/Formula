@@ -96,6 +96,10 @@ fn layout(rect: Rect) -> Layout {
 }
 
 impl Formula for Easing {
+    fn params(&self) -> Vec<(&'static str, f64)> {
+        vec![("t", self.progress() as f64)]
+    }
+
     fn id(&self) -> &'static str {
         "ease-out-cubic"
     }
