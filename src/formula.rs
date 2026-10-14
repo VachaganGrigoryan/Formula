@@ -82,8 +82,9 @@ impl Tone {
     }
 }
 
+/// One run of an equation's text.
 #[derive(Clone, Debug)]
-enum Piece {
+pub enum Piece {
     Text(String),
     Sub(String),
     Sup(String),
@@ -126,6 +127,11 @@ impl MathText {
             last.1 = Some(tone);
         }
         self
+    }
+
+    /// The runs of text, in order, without their tints.
+    pub fn pieces(&self) -> impl Iterator<Item = &Piece> {
+        self.pieces.iter().map(|(p, _)| p)
     }
 
     /// The plain text of the equation, without formatting.
