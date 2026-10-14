@@ -93,6 +93,19 @@ impl Tree {
         self.n_mut(id).height = h;
     }
 
+    /// Recompute every cached height from the links. Mid-operation the
+    /// ancestors of a change are stale, so snapshots are normalised.
+    fn fix_heights(&mut self) {
+        fn go(t: &mut Tree, at: Option<usize>) -> i32 {
+            let Some(id) = at else { return 0 };
+            let (l, r) = (t.n(id).left, t.n(id).right);
+            let h = 1 + go(t, l).max(go(t, r));
+            t.n_mut(id).height = h;
+            h
+        }
+        go(self, self.root);
+    }
+
     fn set_link(&mut self, link: Link, to: usize) {
         match link {
             Link::Root => self.root = Some(to),
@@ -108,8 +121,10 @@ impl Tree {
         rotation: Option<Rotation>,
         caption: String,
     ) {
+        let mut tree = self.clone();
+        tree.fix_heights();
         frames.push(Frame {
-            tree: self.clone(),
+            tree,
             focus,
             rotation,
             caption,
@@ -120,6 +135,7 @@ impl Tree {
     fn snap_linked(&self, frames: &mut Vec<Frame>, link: Link, to: usize, caption: String) {
         let mut tree = self.clone();
         tree.set_link(link, to);
+        tree.fix_heights();
         frames.push(Frame {
             tree,
             focus: Some(to),
@@ -578,6 +594,35 @@ mod tests {
         let depths: Vec<usize> = l.iter().map(|e| e.2).collect();
         assert_eq!(depths, vec![1, 0, 1]);
         assert!(l.iter().all(|e| e.1 > 0.0 && e.1 < 1.0));
+    }
+
+    #[test]
+    fn every_frame_is_a_consistent_snapshot() {
+        fn heights_ok(t: &Tree, at: Option<usize>) -> i32 {
+            let Some(n) = at.and_then(|id| t.node(id)) else {
+                return 0;
+            };
+            let h = 1 + heights_ok(t, n.left).max(heights_ok(t, n.right));
+            assert_eq!(n.height, h, "cached height of {}", n.key);
+            h
+        }
+        for balance in [false, true] {
+            let mut rng = Rng::new(7);
+            let mut t = Tree::default();
+            for _ in 0..300 {
+                let k = rng.index(40) as i32;
+                let mut frames = Vec::new();
+                if rng.f32() < 0.6 {
+                    t.insert(k, balance, &mut frames);
+                } else {
+                    t.delete(k, balance, &mut frames);
+                }
+                for f in &frames {
+                    heights_ok(&f.tree, f.tree.root());
+                }
+                assert_eq!(&frames.last().unwrap().tree, &t, "last frame is the result");
+            }
+        }
     }
 
     #[test]
