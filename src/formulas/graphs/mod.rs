@@ -1,6 +1,7 @@
 //! Graph and tree algorithms recorded once and replayed step by step.
 
 pub mod grid;
+pub mod path;
 
 use std::cell::RefCell;
 use std::rc::Rc;
