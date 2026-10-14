@@ -85,6 +85,7 @@ For n × n matrices the same questions cost O(n²) per point, O(n³) for a deter
 - **Drag the tips of i and j**: edits the columns directly; with **Snap tips to 0.5** the tips land on half-unit points.
 - **Presets**: identity, scale, rotate 30°, shear, reflect, project and a singular matrix. Choosing one plays the morph from the identity.
 - **Animate**: replays the morph from the identity to the current matrix.
+- **Then apply…** adds a second or third matrix to a chain `M1, M2, M3`, applied in that order, so the transform is the product `A = M3·M2·M1`. The tabs pick the stage the sliders and presets edit, **Remove** drops it, and **Animate** plays the stages one after another. With more than one stage the arrow tips show the product's columns and are not draggable.
 - **House / Letter F / Unit square**: the figure drawn before (dashed) and after (solid) the transformation. The F is asymmetric, so reflections are easy to spot.
 - The readout shows the matrix, `det` with what it means for areas and orientation, and the eigenvalues; dashed lines through the origin are the eigenvectors, labeled with their `λ`.
 

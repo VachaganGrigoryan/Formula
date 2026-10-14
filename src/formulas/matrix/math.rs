@@ -123,6 +123,29 @@ impl std::ops::Mul for Mat2 {
     }
 }
 
+/// The single matrix for applying `chain[0]` first, then `chain[1]`, …:
+/// `… · M2 · M1`. The identity for an empty chain.
+pub fn product(chain: &[Mat2]) -> Mat2 {
+    chain.iter().fold(Mat2::IDENTITY, |acc, &m| m * acc)
+}
+
+/// The chain part way through its animation: stage `k` (for `t` in
+/// `k..k + 1`) morphs from the identity while the earlier stages are done.
+/// `t = 0` is the identity and `t ≥ chain.len()` the full product.
+pub fn staged(chain: &[Mat2], t: f32) -> Mat2 {
+    let t = t.max(0.0);
+    if t >= chain.len() as f32 {
+        return product(chain);
+    }
+    let k = t.floor() as usize;
+    chain[k].lerp(smoothstep(t - k as f32)) * product(&chain[..k])
+}
+
+/// Ease in and out over `0..=1`.
+pub fn smoothstep(t: f32) -> f32 {
+    t * t * (3.0 - 2.0 * t)
+}
+
 /// The eigenvalues of a 2×2 matrix, and the directions it only stretches.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Eigen {
@@ -263,6 +286,55 @@ mod tests {
         assert_eq!(m.lerp(0.0), Mat2::IDENTITY);
         assert_eq!(m.lerp(1.0), m);
         assert_eq!(m.lerp(0.5), Mat2::new(1.5, 0.5, -0.5, 2.0));
+    }
+
+    #[test]
+    fn product_applies_the_first_stage_first() {
+        let (a, b, c) = (
+            Preset::Scale.matrix(),
+            Preset::Rotate.matrix(),
+            Preset::ShearX.matrix(),
+        );
+        let v = [0.7, -0.4];
+        assert!(close(
+            product(&[a, b, c]).apply(v),
+            c.apply(b.apply(a.apply(v)))
+        ));
+        assert_eq!(product(&[]), Mat2::IDENTITY);
+        assert_eq!(product(&[a]), a);
+    }
+
+    #[test]
+    fn composition_is_associative() {
+        let mut rng = Rng::new(3);
+        let mut random = || {
+            Mat2::new(
+                rng.range(-2.0, 2.0),
+                rng.range(-2.0, 2.0),
+                rng.range(-2.0, 2.0),
+                rng.range(-2.0, 2.0),
+            )
+        };
+        for _ in 0..100 {
+            let (a, b, c) = (random(), random(), random());
+            let (l, r) = ((a * b) * c, a * (b * c));
+            for (x, y) in [(l.a, r.a), (l.b, r.b), (l.c, r.c), (l.d, r.d)] {
+                assert!((x - y).abs() < 1e-3, "{l:?} vs {r:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn stages_animate_one_after_another() {
+        let chain = [Preset::Scale.matrix(), Preset::Rotate.matrix()];
+        assert_eq!(staged(&chain, 0.0), Mat2::IDENTITY);
+        assert_eq!(staged(&chain, 1.0), chain[0]);
+        let half = staged(&chain, 1.5);
+        let want = chain[1].lerp(smoothstep(0.5)) * chain[0];
+        assert!(close(half.apply([1.0, 0.0]), want.apply([1.0, 0.0])));
+        assert!(close(half.apply([0.0, 1.0]), want.apply([0.0, 1.0])));
+        assert_eq!(staged(&chain, 2.0), product(&chain));
+        assert_eq!(staged(&chain, 9.0), product(&chain), "past the end");
     }
 
     #[test]

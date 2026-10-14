@@ -1,6 +1,6 @@
 //! A 2×2 matrix as a transformation of the plane: the grid warps, the basis
 //! vectors land on the columns, and the eigenvectors are the lines that only
-//! stretch.
+//! stretch. Up to three matrices can be chained and applied in order.
 
 pub mod math;
 
@@ -8,12 +8,14 @@ use egui::{Align2, FontId, Pos2, Rect, Sense, Shape, Stroke, pos2, vec2};
 
 use crate::draw;
 use crate::formula::{Formula, MathText, Palette, Tone};
-use math::{Eigen, Mat2, Preset, Vec2};
+use math::{Eigen, Mat2, Preset, Vec2, product, staged};
 
 /// Matrix entries stay within ±`LIMIT`.
 pub const LIMIT: f32 = 5.0;
-/// How long the identity-to-matrix animation takes.
+/// How long each stage of the animation takes.
 pub const ANIMATION_SECONDS: f32 = 1.6;
+/// The most matrices a chain holds.
+pub const MAX_STAGES: usize = 3;
 const SNAP_STEP: f32 = 0.5;
 /// Grid lines on each side of the origin, before and after the transform.
 const GRID: i32 = 12;
@@ -81,10 +83,6 @@ pub fn snap(v: Vec2, step: f32) -> Vec2 {
     v.map(|x| (x / step).round() * step)
 }
 
-fn smoothstep(t: f32) -> f32 {
-    t * t * (3.0 - 2.0 * t)
-}
-
 /// Where the plane's origin sits on screen and how many points one unit is.
 struct Plane {
     origin: Pos2,
@@ -112,9 +110,11 @@ impl Plane {
 }
 
 pub struct MatrixTransform {
-    /// The matrix being studied.
-    m: Mat2,
-    /// Progress of the identity-to-`m` animation, 0..=1.
+    /// The matrices, applied first to last; their product is the transform.
+    chain: Vec<Mat2>,
+    /// The stage the sliders and presets edit.
+    selected: usize,
+    /// Animation progress: stage `k` plays while `t` is in `k..k + 1`.
     t: f32,
     animating: bool,
     figure: Figure,
@@ -127,7 +127,8 @@ impl Default for MatrixTransform {
     fn default() -> Self {
         Self {
             // Two distinct real eigenvalues, so both eigen lines show.
-            m: Mat2::new(1.5, 0.5, 0.25, 1.0),
+            chain: vec![Mat2::new(1.5, 0.5, 0.25, 1.0)],
+            selected: 0,
             t: 1.0,
             animating: false,
             figure: Figure::House,
@@ -138,39 +139,67 @@ impl Default for MatrixTransform {
 }
 
 impl MatrixTransform {
-    /// Play the transformation from the identity.
+    /// Play the transformation from the identity, one stage at a time.
     fn animate(&mut self) {
         self.t = 0.0;
         self.animating = true;
     }
 
     fn stop(&mut self) {
-        self.t = 1.0;
+        self.t = self.chain.len() as f32;
         self.animating = false;
     }
 
     fn advance(&mut self, dt: f32) {
         if self.animating {
             self.t += dt / ANIMATION_SECONDS;
-            if self.t >= 1.0 {
+            if self.t >= self.chain.len() as f32 {
                 self.stop();
             }
         }
     }
 
-    /// The matrix on screen: part way from the identity while animating.
+    /// The matrix on screen: the product, or part of it while animating.
     fn shown(&self) -> Mat2 {
-        if self.t >= 1.0 {
-            self.m
-        } else {
-            self.m.lerp(smoothstep(self.t))
+        staged(&self.chain, self.t)
+    }
+
+    /// Dragging the basis tips edits the matrix directly, which is only
+    /// unambiguous while the chain holds a single matrix.
+    fn tips_editable(&self) -> bool {
+        self.chain.len() == 1
+    }
+
+    /// Append an identity stage and select it.
+    fn add_stage(&mut self) {
+        if self.chain.len() < MAX_STAGES {
+            self.chain.push(Mat2::IDENTITY);
+            self.selected = self.chain.len() - 1;
+            self.stop();
         }
+    }
+
+    fn remove_stage(&mut self) {
+        if self.chain.len() > 1 {
+            self.chain.remove(self.selected);
+            self.selected = self.selected.min(self.chain.len() - 1);
+            self.stop();
+        }
+    }
+
+    /// `M2·M1`: the chain written the way the product reads.
+    fn chain_label(&self) -> String {
+        let names: Vec<String> = (1..=self.chain.len())
+            .rev()
+            .map(|k| format!("M{k}"))
+            .collect();
+        names.join("·")
     }
 }
 
 impl Formula for MatrixTransform {
     fn params(&self) -> Vec<(&'static str, f64)> {
-        let Mat2 { a, b, c, d } = self.m;
+        let Mat2 { a, b, c, d } = product(&self.chain);
         vec![
             ("a", a as f64),
             ("b", b as f64),
@@ -194,7 +223,8 @@ impl Formula for MatrixTransform {
     fn summary(&self) -> &'static str {
         "A 2×2 matrix moves every point of the plane. Its columns are where the basis \
          vectors i and j land; drag their tips and watch the whole grid follow. Dashed \
-         lines are the eigenvectors: directions the matrix only stretches."
+         lines are the eigenvectors: directions the matrix only stretches. Chain up to \
+         three matrices to see that the order of composition matters."
     }
 
     fn notes(&self) -> &'static str {
@@ -221,6 +251,9 @@ impl Formula for MatrixTransform {
     }
 
     fn interact(&mut self, response: &egui::Response, rect: Rect) {
+        if !self.tips_editable() {
+            return;
+        }
         let plane = Plane::new(rect);
         let m = self.shown();
         let tips = [
@@ -242,7 +275,7 @@ impl Formula for MatrixTransform {
             if self.snap {
                 v = snap(v, SNAP_STEP);
             }
-            self.m = set_column(self.m, col, v);
+            self.chain[0] = set_column(self.chain[0], col, v);
         }
         if response.drag_stopped() {
             self.dragging = None;
@@ -358,7 +391,9 @@ impl Formula for MatrixTransform {
         {
             let tip = screen(v);
             painter.arrow(origin, tip - origin, Stroke::new(3.0, color));
-            draw::handle(&painter, tip, color, palette.card, self.dragging == Some(n));
+            if self.tips_editable() {
+                draw::handle(&painter, tip, color, palette.card, self.dragging == Some(n));
+            }
             painter.text(
                 tip + vec2(10.0, -10.0),
                 Align2::LEFT_BOTTOM,
@@ -371,7 +406,13 @@ impl Formula for MatrixTransform {
         // Readout.
         let mono = FontId::monospace(12.5);
         let base = rect.left_top() + vec2(14.0, 12.0);
+        let chain = if self.chain.len() > 1 {
+            format!("A = {}", self.chain_label())
+        } else {
+            "A".to_owned()
+        };
         let rows = [
+            (chain, palette.muted),
             (format!("[{:>6.2} {:>6.2} ]", m.a, m.b), palette.ink),
             (format!("[{:>6.2} {:>6.2} ]", m.c, m.d), palette.ink),
             (
@@ -397,16 +438,39 @@ impl Formula for MatrixTransform {
     }
 
     fn controls(&mut self, ui: &mut egui::Ui, _palette: &Palette) {
+        ui.horizontal_wrapped(|ui| {
+            for k in 0..self.chain.len() {
+                if ui
+                    .selectable_label(self.selected == k, format!("M{}", k + 1))
+                    .clicked()
+                {
+                    self.selected = k;
+                }
+            }
+            if self.chain.len() < MAX_STAGES && ui.button("Then apply…").clicked() {
+                self.add_stage();
+            }
+            if self.chain.len() > 1 && ui.button("Remove").clicked() {
+                self.remove_stage();
+            }
+        });
+        if self.chain.len() > 1 {
+            ui.label(format!(
+                "Applied M1 first; the result is A = {}. Edit each stage with its sliders.",
+                self.chain_label()
+            ));
+        }
+        let m = &mut self.chain[self.selected];
         let mut changed = false;
         egui::Grid::new("matrix-entries")
             .num_columns(2)
             .spacing([12.0, 8.0])
             .show(ui, |ui| {
                 for (name, v) in [
-                    ("a", &mut self.m.a),
-                    ("b", &mut self.m.b),
-                    ("c", &mut self.m.c),
-                    ("d", &mut self.m.d),
+                    ("a", &mut m.a),
+                    ("b", &mut m.b),
+                    ("c", &mut m.c),
+                    ("d", &mut m.d),
                 ] {
                     ui.label(name);
                     changed |= ui
@@ -422,7 +486,7 @@ impl Formula for MatrixTransform {
         ui.horizontal_wrapped(|ui| {
             for p in Preset::ALL {
                 if ui.button(p.label()).clicked() {
-                    self.m = p.matrix();
+                    self.chain[self.selected] = p.matrix();
                     self.animate();
                 }
             }
@@ -471,7 +535,7 @@ mod tests {
     #[test]
     fn animation_runs_from_the_identity_to_the_matrix() {
         let mut f = MatrixTransform {
-            m: Preset::ShearX.matrix(),
+            chain: vec![Preset::ShearX.matrix()],
             ..Default::default()
         };
         f.animate();
@@ -480,18 +544,51 @@ mod tests {
         let mid = f.shown();
         assert!(mid.b > 0.0 && mid.b < 1.0, "{mid:?}");
         f.advance(10.0);
-        assert_eq!(f.shown(), f.m);
+        assert_eq!(f.shown(), f.chain[0]);
         assert!(!f.animating);
     }
 
     #[test]
-    fn params_are_the_four_entries() {
+    fn a_chain_animates_through_every_stage() {
+        let mut f = MatrixTransform {
+            chain: vec![Preset::Scale.matrix(), Preset::Rotate.matrix()],
+            ..Default::default()
+        };
+        f.animate();
+        f.advance(ANIMATION_SECONDS);
+        assert_eq!(f.shown(), f.chain[0], "first stage done");
+        assert!(f.animating);
+        f.advance(ANIMATION_SECONDS);
+        assert_eq!(f.shown(), math::product(&f.chain));
+        assert!(!f.animating);
+    }
+
+    #[test]
+    fn tips_are_draggable_only_for_a_single_matrix() {
+        let mut f = MatrixTransform::default();
+        assert!(f.tips_editable());
+        f.add_stage();
+        assert_eq!(f.chain.len(), 2);
+        assert_eq!(f.selected, 1, "the new stage is selected");
+        assert!(!f.tips_editable());
+        f.add_stage();
+        f.add_stage();
+        assert_eq!(f.chain.len(), MAX_STAGES);
+        f.remove_stage();
+        assert_eq!(f.chain.len(), MAX_STAGES - 1);
+        assert!(f.selected < f.chain.len());
+    }
+
+    #[test]
+    fn params_are_the_entries_of_the_product() {
         let f = MatrixTransform {
-            m: Mat2::new(1.0, 2.0, 3.0, 4.0),
+            chain: vec![Mat2::new(1.0, 2.0, 3.0, 4.0), Preset::Reflect.matrix()],
             ..Default::default()
         };
         let names: Vec<_> = f.params().iter().map(|p| p.0).collect();
         assert_eq!(names, ["a", "b", "c", "d"]);
-        assert_eq!(f.params()[3].1, 4.0);
+        // Reflecting in the x axis negates the bottom row.
+        let values: Vec<_> = f.params().iter().map(|p| p.1).collect();
+        assert_eq!(values, [1.0, 2.0, -3.0, -4.0]);
     }
 }
