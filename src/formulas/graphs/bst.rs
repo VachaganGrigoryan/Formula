@@ -304,7 +304,7 @@ impl Formula for SearchTree {
 
         let area = Rect::from_min_max(rect.min + vec2(0.0, HEADER), rect.max - vec2(0.0, FOOTER));
         let count = pos.len().max(1) as f32;
-        let radius = RADIUS.min((area.width() - 8.0) / (2.2 * count)).max(5.0);
+        let radius = RADIUS.min((area.width() - 8.0) / (2.2 * count)).max(8.0);
         let levels = pos
             .iter()
             .fold(1.0_f32, |m, p| m.max(p.2 + 1.0))
@@ -335,7 +335,7 @@ impl Formula for SearchTree {
         let pivot = frame.rotation.map(|r| match r {
             Rotation::Left(id) | Rotation::Right(id) => id,
         });
-        let font = if radius >= 11.0 { 12.0 } else { radius * 1.05 };
+        let font = (radius * 1.05).clamp(9.0, 12.0);
         for p in &pos {
             let c = place(p);
             let focused = frame.focus == Some(p.0);
