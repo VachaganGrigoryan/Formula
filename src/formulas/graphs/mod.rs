@@ -1,5 +1,6 @@
 //! Graph and tree algorithms recorded once and replayed step by step.
 
+pub mod bst;
 pub mod grid;
 pub mod path;
 pub mod pathfinding;

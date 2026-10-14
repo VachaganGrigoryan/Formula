@@ -35,6 +35,7 @@ Formulas included, grouped as in the tool library:
 | Animation & Easing | Cubic ease-out `f(t) = 1 − (1 − t)³` | curve and speed plot, linear vs eased race, bars gliding into place |
 | Color & Accessibility | Relative luminance `Y = 0.2126R + 0.7152G + 0.0722B` | heatmap picks black or white text per cell; contrast ratios; WCAG linearization toggle |
 | Graphs & Trees | Breadth-first search `dist(n) = dist(u) + 1` | draw walls and mud on a shared grid, drag the start and goal, mazes and random walls; play, step and scrub through every frontier, visit and path step |
+| | Binary search tree `|h(left) − h(right)| ≤ 1` (AVL) | insert, delete and find a key; random trees; toggle AVL balancing; in-, pre- and post-order walks; every comparison and rotation is a frame you can play, step and scrub, and rotations glide the nodes into place |
 | Sorting | Bubble, Selection, Insertion, Merge, Quick, Quick (3-way), Heap and Counting sort | one shared, randomizable list (size, random / nearly sorted / reversed / few unique); play, pause, step, step back and scrub through every recorded comparison, swap and write; four skins; sound |
 | | Sorting race | pick algorithms and race them on the same list with live comparison, move and timing bars |
 

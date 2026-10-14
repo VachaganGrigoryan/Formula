@@ -368,6 +368,18 @@ pub fn tool(painter: &Painter, rect: Rect, id: &str, color: Color32) {
             p.dot(0.5, 0.2, 0.08);
             p.dot(0.85, 0.75, 0.08);
         }
+        "binary-search-tree" => {
+            // A root with two children and two grandchildren joined by lines.
+            p.line(&[(0.5, 0.18), (0.28, 0.5)]);
+            p.line(&[(0.5, 0.18), (0.72, 0.5)]);
+            p.line(&[(0.28, 0.5), (0.16, 0.84)]);
+            p.line(&[(0.72, 0.5), (0.84, 0.84)]);
+            p.dot(0.5, 0.18, 0.09);
+            p.dot(0.28, 0.5, 0.08);
+            p.dot(0.72, 0.5, 0.08);
+            p.dot(0.16, 0.84, 0.07);
+            p.dot(0.84, 0.84, 0.07);
+        }
         "a-star" => {
             // A five-pointed star with a dot target at its centre.
             let pts: Vec<(f32, f32)> = (0..10)

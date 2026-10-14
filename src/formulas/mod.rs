@@ -286,6 +286,13 @@ pub static TOOLS: &[Tool] = &[
     tool!("dfs", "Depth-first search", GRAPHS, "DFS", path::<1>),
     tool!("dijkstra", "Dijkstra's algorithm", GRAPHS, "DIJ", path::<2>),
     tool!("a-star", "A* search", GRAPHS, "AST", path::<3>),
+    tool!(
+        "binary-search-tree",
+        "Binary search tree",
+        GRAPHS,
+        "BST",
+        new::<graphs::bst::SearchTree>
+    ),
 ];
 
 /// The tool with this id.
