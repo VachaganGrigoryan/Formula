@@ -347,6 +347,22 @@ mod tests {
         }
     }
 
+    /// Drawing a formula's controls must not change its parameters. egui's
+    /// sliders round to `step_by` on every draw unless clamping is `Edits`.
+    #[test]
+    fn showing_controls_leaves_parameters_unchanged() {
+        let ctx = egui::Context::default();
+        let palette = crate::formula::Palette::dark();
+        let env = ToolEnv::new();
+        for tool in TOOLS {
+            let mut f = (tool.make)(&env);
+            let before = f.params();
+            let mut out = ctx.run_ui(Default::default(), |ui| f.controls(ui, &palette));
+            out.textures_delta.clear();
+            assert_eq!(f.params(), before, "{}", tool.id);
+        }
+    }
+
     /// Every character a formula shows in its text must exist in egui's bundled
     /// fonts, or it renders as an empty box.
     #[test]
