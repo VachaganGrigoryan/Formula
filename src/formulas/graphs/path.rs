@@ -109,12 +109,7 @@ pub fn record(search: Search, grid: &Grid) -> Vec<PathOp> {
                     found = true;
                     break;
                 }
-                // Reverse order so "up" is explored first, except that a goal
-                // next door is always taken at once (pushed last, popped first).
-                let mut next = grid.neighbors(c);
-                next.reverse();
-                next.sort_by_key(|&n| n == goal);
-                for n in next {
+                for n in grid.neighbors(c).into_iter().rev() {
                     if !visited[n] {
                         ops.push(PathOp::Frontier {
                             cell: n,
@@ -267,13 +262,19 @@ mod tests {
     }
 
     /// Review Focus 1: the markers can never share a cell, so the shortest
-    /// possible search is between adjacent markers.
+    /// possible search is between adjacent markers. DFS only guarantees *a*
+    /// path, not the shortest one.
     #[test]
     fn adjacent_markers_give_a_two_cell_path() {
         let g = Grid::new(4, 3);
         assert_eq!((g.xy(g.start()), g.xy(g.goal())), ((1, 1), (2, 1)));
         for s in Search::ALL {
-            assert_eq!(path_of(&record(s, &g)), vec![g.start(), g.goal()], "{s:?}");
+            let path = path_of(&record(s, &g));
+            if s == Search::Dfs {
+                assert!(valid(&g, &path), "{s:?}");
+            } else {
+                assert_eq!(path, vec![g.start(), g.goal()], "{s:?}");
+            }
         }
     }
 
