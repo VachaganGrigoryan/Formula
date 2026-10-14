@@ -79,6 +79,18 @@ impl Inspector {
         self.tool
     }
 
+    /// The formula instance the panel is about: the selected viewport's own
+    /// (with its current parameters), or else a preview of the context tool.
+    pub fn context_formula<'a>(&'a mut self, ws: &'a Workspace) -> Option<&'a dyn Formula> {
+        if let Some(uid) = ws.board.primary()
+            && let Some(vp) = ws.board.get(uid)
+        {
+            return Some(&*vp.formula);
+        }
+        let tool = self.context(ws)?;
+        Some(self.preview(tool))
+    }
+
     pub fn show(
         &mut self,
         ui: &mut egui::Ui,
@@ -664,4 +676,41 @@ fn icon_text_button(ui: &mut egui::Ui, icon: Icon, label: &str, chrome: &Chrome)
         chrome.text,
     );
     response
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cad::board::Board;
+    use crate::cad::camera::Camera;
+    use crate::cad::canvas::Settings;
+    use crate::formulas;
+
+    fn workspace() -> Workspace {
+        Workspace::new(Board::default(), Camera::default(), Settings::default())
+    }
+
+    #[test]
+    fn context_formula_is_the_selected_viewports_instance() {
+        let mut ws = workspace();
+        let tool = formulas::tool("lissajous").unwrap();
+        let uid = ws.place(tool, Some(egui::pos2(0.0, 0.0)), egui::Vec2::ZERO);
+        ws.board.selection = vec![uid];
+        let live: *const dyn Formula = &*ws.board.get(uid).unwrap().formula;
+        let mut inspector = Inspector::new(Tab::Code, Lang::Python);
+        let f = inspector.context_formula(&ws).unwrap();
+        assert!(std::ptr::addr_eq(f, live));
+    }
+
+    #[test]
+    fn context_formula_falls_back_to_a_preview() {
+        let mut ws = workspace();
+        let placed = formulas::tool("lissajous").unwrap();
+        ws.place(placed, Some(egui::pos2(0.0, 0.0)), egui::Vec2::ZERO);
+        ws.board.selection.clear();
+        let mut inspector = Inspector::new(Tab::Code, Lang::Python);
+        assert!(inspector.context_formula(&ws).is_none());
+        inspector.tool = formulas::tool("mandelbrot");
+        assert_eq!(inspector.context_formula(&ws).unwrap().id(), "mandelbrot");
+    }
 }
