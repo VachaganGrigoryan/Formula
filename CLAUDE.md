@@ -95,8 +95,15 @@ camera, settings, theme, panel visibility, and the inspector tab/lang. A formula
    `latex::symbol` (`latex::tests::every_equation_converts_to_ascii_latex`).
 6. All UI text must render with egui's bundled font. `formulas::tests::all_text_has_glyphs` fails
    on characters such as ′ ∈ → ᵢ ᵣ or combining accents (x̄).
-7. `canvas::tests::every_tool_runs_on_the_canvas` places every tool at its default size and its
+7. A new category constant needs a short toolbar name in `cad::chrome::short`
+   (`every_category_has_a_toolbar_name`); otherwise it shows up as "Other".
+8. `canvas::tests::every_tool_runs_on_the_canvas` places every tool at its default size and its
    `min_size` and runs frames with input, so `paint` must not panic at the minimum size.
+
+Don't use `egui::Slider::step_by` for values that presets or code set: drawing the slider rounds
+the value (cos 30° = 0.866 became 0.85). `matrix::tests::controls_leave_preset_values_exact` shows
+how to test controls headlessly. `matrix::tests::dragging_the_i_tip_on_the_canvas_edits_the_matrix`
+drives a drag through the real `Workspace`, one egui frame per event.
 
 Use `Palette` colors (`x`, `y`, `trace`, `fill`, …, from `formula.rs`) instead of hard-coded colors,
 so formulas match in both the light and the dark theme. Helpers for draggable handles, gradients
