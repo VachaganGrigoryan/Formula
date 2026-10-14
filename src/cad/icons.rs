@@ -338,6 +338,48 @@ pub fn tool(painter: &Painter, rect: Rect, id: &str, color: Color32) {
                 (0.16 + 0.34 * a.cos(), 0.5 + 0.34 * a.sin())
             });
         }
+        "dfs" => {
+            // One long zigzag diving to the bottom-right, ending in a dot.
+            p.line(&[
+                (0.12, 0.12),
+                (0.5, 0.12),
+                (0.5, 0.34),
+                (0.16, 0.34),
+                (0.16, 0.56),
+                (0.5, 0.56),
+                (0.5, 0.78),
+                (0.86, 0.78),
+            ]);
+            p.dot(0.12, 0.12, 0.06);
+            p.dot(0.86, 0.78, 0.08);
+        }
+        "dijkstra" => {
+            // Three dots joined by lines; the shortest leg is drawn thick.
+            let thick = Pen {
+                stroke: Stroke::new(p.stroke.width * 2.2, color),
+                painter: p.painter,
+                rect: p.rect,
+                color,
+            };
+            p.line(&[(0.15, 0.75), (0.5, 0.2)]);
+            p.line(&[(0.5, 0.2), (0.85, 0.75)]);
+            thick.line(&[(0.15, 0.75), (0.85, 0.75)]);
+            p.dot(0.15, 0.75, 0.08);
+            p.dot(0.5, 0.2, 0.08);
+            p.dot(0.85, 0.75, 0.08);
+        }
+        "a-star" => {
+            // A five-pointed star with a dot target at its centre.
+            let pts: Vec<(f32, f32)> = (0..10)
+                .map(|k| {
+                    let a = -PI / 2.0 + k as f32 * PI / 5.0;
+                    let r = if k % 2 == 0 { 0.42 } else { 0.18 };
+                    (0.5 + r * a.cos(), 0.54 + r * a.sin())
+                })
+                .collect();
+            p.closed(&pts);
+            p.dot(0.5, 0.54, 0.06);
+        }
         "bubble-sort" => p.bars(&[0.3, 0.55, 0.45, 0.8, 1.0], &[1, 2]),
         "selection-sort" => {
             p.bars(&[0.25, 0.5, 0.9, 0.15, 0.7], &[3]);

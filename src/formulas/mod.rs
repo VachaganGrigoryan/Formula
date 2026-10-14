@@ -283,6 +283,9 @@ pub static TOOLS: &[Tool] = &[
     tool!("counting-sort", "Counting sort", SORTING, "CNT", sort::<7>),
     tool!("sorting-race", "Sorting race", SORTING, "RCE", race),
     tool!("bfs", "Breadth-first search", GRAPHS, "BFS", path::<0>),
+    tool!("dfs", "Depth-first search", GRAPHS, "DFS", path::<1>),
+    tool!("dijkstra", "Dijkstra's algorithm", GRAPHS, "DIJ", path::<2>),
+    tool!("a-star", "A* search", GRAPHS, "AST", path::<3>),
 ];
 
 /// The tool with this id.
