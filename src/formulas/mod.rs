@@ -16,6 +16,7 @@ pub mod lissajous;
 pub mod lorenz;
 pub mod luminance;
 pub mod mandelbrot;
+pub mod matrix;
 pub mod normalize;
 pub mod polar;
 pub mod projection;
