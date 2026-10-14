@@ -39,9 +39,11 @@ fn neighbors(walls: &[bool], i: usize) -> Vec<usize> {
         .into_iter()
         .filter_map(|(dx, dy)| {
             let (nx, ny) = (x + dx, y + dy);
-            let inside = nx >= 0 && ny >= 0 && nx < W as i32 && ny < H as i32;
+            if nx < 0 || ny < 0 || nx >= W as i32 || ny >= H as i32 {
+                return None;
+            }
             let n = ny as usize * W + nx as usize;
-            (inside && !walls[n]).then_some(n)
+            (!walls[n]).then_some(n)
         })
         .collect()
 }
