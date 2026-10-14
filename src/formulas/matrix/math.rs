@@ -45,6 +45,22 @@ impl Mat2 {
         )
     }
 
+    /// How many independent columns: 2 for an invertible matrix, 1 when the
+    /// plane collapses onto a line, 0 when it collapses onto the origin.
+    pub fn rank(self) -> u8 {
+        let s = self.scale();
+        if [self.a, self.b, self.c, self.d]
+            .iter()
+            .all(|x| x.abs() < 1e-6 * s)
+        {
+            0
+        } else if self.det().abs() < 1e-4 * s * s {
+            1
+        } else {
+            2
+        }
+    }
+
     /// The largest entry's size, at least 1: the scale for tolerances.
     fn scale(self) -> f32 {
         [self.a, self.b, self.c, self.d]
@@ -216,6 +232,20 @@ mod tests {
         assert_eq!(Mat2::new(1.0, 2.0, 3.0, 4.0).det(), -2.0);
         assert_eq!(Preset::Reflect.matrix().det(), -1.0);
         assert!(Preset::Singular.matrix().det().abs() < EPS);
+    }
+
+    #[test]
+    fn rank_counts_independent_columns() {
+        assert_eq!(Mat2::IDENTITY.rank(), 2);
+        assert_eq!(Preset::ShearX.matrix().rank(), 2);
+        assert_eq!(Preset::Singular.matrix().rank(), 1);
+        assert_eq!(Preset::Project.matrix().rank(), 1);
+        assert_eq!(
+            Mat2::new(1.0, 2.0, 0.5, 1.000_001).rank(),
+            1,
+            "nearly singular"
+        );
+        assert_eq!(Mat2::new(0.0, 0.0, 0.0, 0.0).rank(), 0);
     }
 
     #[test]

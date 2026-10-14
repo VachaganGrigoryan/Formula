@@ -257,6 +257,13 @@ pub fn tool(painter: &Painter, rect: Rect, id: &str, color: Color32) {
             });
             p.fill(&[(0.42, 0.04), (0.56, 0.1), (0.44, 0.18)]);
         }
+        "matrix-transform" => {
+            // A sheared grid: the unit square's image and its mid-lines.
+            p.closed(&[(0.1, 0.88), (0.58, 0.88), (0.9, 0.18), (0.42, 0.18)]);
+            p.line(&[(0.34, 0.88), (0.66, 0.18)]);
+            p.line(&[(0.26, 0.53), (0.74, 0.53)]);
+            p.dot(0.1, 0.88, 0.07);
+        }
         "voronoi" => {
             p.closed(&[(0.1, 0.1), (0.9, 0.1), (0.9, 0.9), (0.1, 0.9)]);
             p.line(&[(0.1, 0.45), (0.45, 0.55), (0.62, 0.1)]);
