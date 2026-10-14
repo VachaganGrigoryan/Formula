@@ -93,6 +93,11 @@ fn bar_rect(chart: Rect, i: usize, n: usize) -> Rect {
 }
 
 impl Formula for Normalize {
+    fn params(&self) -> Vec<(&'static str, f64)> {
+        let (lo, hi) = bounds(&self.values());
+        vec![("X_min", lo as f64), ("X_max", hi as f64)]
+    }
+
     fn id(&self) -> &'static str {
         "min-max-normalization"
     }

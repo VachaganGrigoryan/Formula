@@ -308,6 +308,10 @@ impl FlowField {
 }
 
 impl Formula for FlowField {
+    fn params(&self) -> Vec<(&'static str, f64)> {
+        vec![("s", self.zoom as f64), ("k", self.turns as f64)]
+    }
+
     fn id(&self) -> &'static str {
         "flow-field"
     }

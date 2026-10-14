@@ -1,7 +1,8 @@
 //! Every formula the app can visualize.
 //!
 //! Adding one: create a module here, implement [`Formula`] for its state,
-//! and append it to [`registry`]. Nothing else in the app needs to change.
+//! add a `tool!` entry to [`TOOLS`], an icon in `cad::icons::tool`, and its
+//! docs and code in `assets/content/<id>/`. The tests check all of these.
 
 pub mod bezier;
 pub mod distance;

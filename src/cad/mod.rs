@@ -11,5 +11,6 @@ pub mod history;
 pub mod icons;
 pub mod inspector;
 pub mod markdown;
+pub mod notebook;
 pub mod overlay;
 pub mod theme;

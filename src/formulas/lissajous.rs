@@ -54,6 +54,16 @@ impl Lissajous {
 }
 
 impl Formula for Lissajous {
+    fn params(&self) -> Vec<(&'static str, f64)> {
+        vec![
+            ("A", self.amp_x),
+            ("B", self.amp_y),
+            ("a", self.a as f64),
+            ("b", self.b as f64),
+            ("δ", self.delta),
+        ]
+    }
+
     fn id(&self) -> &'static str {
         "lissajous"
     }
@@ -236,5 +246,23 @@ impl Formula for Lissajous {
                 self.t = 0.0;
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::latex::latex_snippet;
+
+    #[test]
+    fn snippet_follows_the_sliders() {
+        let mut f = Lissajous::default();
+        let before = latex_snippet(&f);
+        f.a = 5;
+        f.delta = 0.25;
+        let after = latex_snippet(&f);
+        assert_ne!(before, after);
+        assert!(after.contains(r"a = 5"), "{after}");
+        assert!(after.contains(r"\delta = 0.25"), "{after}");
     }
 }

@@ -82,8 +82,9 @@ impl Tone {
     }
 }
 
+/// One run of an equation's text.
 #[derive(Clone, Debug)]
-enum Piece {
+pub enum Piece {
     Text(String),
     Sub(String),
     Sup(String),
@@ -126,6 +127,11 @@ impl MathText {
             last.1 = Some(tone);
         }
         self
+    }
+
+    /// The runs of text, in order, without their tints.
+    pub fn pieces(&self) -> impl Iterator<Item = &Piece> {
+        self.pieces.iter().map(|(p, _)| p)
     }
 
     /// The plain text of the equation, without formatting.
@@ -201,6 +207,12 @@ pub trait Formula {
 
     /// The equations being visualized, one per line.
     fn equations(&self) -> Vec<MathText>;
+
+    /// The current values of the parameters in the equations, named as they
+    /// appear there (`"θ"`, `"k_r"`; an underscore starts a subscript).
+    fn params(&self) -> Vec<(&'static str, f64)> {
+        Vec::new()
+    }
 
     /// Height of the stage for a given width.
     fn stage_height(&self, width: f32) -> f32 {

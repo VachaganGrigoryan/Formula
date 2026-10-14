@@ -8,7 +8,8 @@ the tool library or the command line, then click the drafting canvas to place it
 (or drag out a rectangle to choose its size). Viewports can be moved, resized, duplicated, locked,
 hidden and deleted, with undo. For any formula, the Inspector shows its properties and controls,
 its full reference documentation, and working visualization code in **Python**, **TypeScript** and
-**Rust** to copy or download.
+**Rust** to copy or download. Its equations export as **LaTeX** with the current parameter values, or
+as a ready-to-run **Jupyter notebook**.
 
 Formulas included, grouped as in the tool library:
 
@@ -45,8 +46,8 @@ placing it first if needed.
 | Toolbar | Select (V) and Pan (H), undo/redo, zoom; one button per category with a menu of its tools |
 | Browser (left) | Tool library (click to place, double-click to place beside the drawing) and the list of viewports with show/hide and lock |
 | Canvas | Infinite drafting plane with an adaptive grid, origin axes, rulers, crosshair, navigator (with zoom, fit and 1:1 buttons) and title block |
-| Inspector (right) | **Properties**: name, X/Y/W/H, lock, the equations and the formula's controls. **Docs**: the full reference. **Code**: Python, TypeScript and Rust, with Copy and Download (Save on desktop). The maximize button widens it for reading |
-| Command line | Type a tool alias (`LOR`, `BEZ`, `MAN`, `VOR`, …) or name to place it, or a command: `fit`, `zoom 150`, `del`, `dup`, `undo`, `redo`, `grid`, `snap`, `ortho`, `help` |
+| Inspector (right) | **Properties**: name, X/Y/W/H, lock, the equations and the formula's controls. **Docs**: the full reference. **Code**: Python, TypeScript and Rust, with Copy and Download (Save on desktop), plus **LaTeX** (the equations with the viewport's current values) and a Jupyter **Notebook** (`.ipynb`). The maximize button widens it for reading |
+| Command line | Type a tool alias (`LOR`, `BEZ`, `MAN`, `VOR`, …) or name to place it, or a command: `fit`, `zoom 150`, `del`, `dup`, `undo`, `redo`, `grid`, `snap`, `ortho`, `latex` (copy the selection's equations as LaTeX), `ipynb` (export it as a notebook), `help` |
 | Status bar | Pointer coordinates, current tool, SNAP / GRID / ORTHO toggles, zoom, viewport count, fps |
 
 Working with viewports:

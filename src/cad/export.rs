@@ -13,6 +13,15 @@ pub const SAVE_LABEL: &str = if cfg!(target_arch = "wasm32") {
     "Save file"
 };
 
+/// What to tell the user about the result of [`save`].
+pub fn saved_message(result: Result<String, String>) -> String {
+    match result {
+        Ok(path) if cfg!(target_arch = "wasm32") => format!("Downloaded {path}"),
+        Ok(path) => format!("Saved {path}"),
+        Err(e) => format!("Could not save: {e}"),
+    }
+}
+
 /// Save `text` as `file_name` for the tool `id`. On the web this downloads the
 /// file; on the desktop it writes `exports/<id>/<file_name>` and returns the
 /// path.

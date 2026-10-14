@@ -19,8 +19,10 @@ use super::history::{Edit, History};
 use super::icons;
 use super::overlay;
 use super::theme::Chrome;
+use super::{export, notebook};
 use crate::formula::Palette;
 use crate::formulas::{self, Tool};
+use crate::latex;
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Mode {
@@ -167,6 +169,9 @@ pub struct Workspace {
     /// Messages for the command line's log, oldest first.
     pub log: Vec<String>,
     pub request: Option<Request>,
+    /// Text for the system clipboard, copied at the start of the next frame
+    /// (commands run without access to egui).
+    pub clipboard: Option<String>,
     /// The canvas rect last frame.
     pub view: Rect,
     gesture: Option<Gesture>,
@@ -186,6 +191,7 @@ impl Workspace {
             pointer: None,
             log: Vec::new(),
             request: None,
+            clipboard: None,
             view: Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0)),
             gesture: None,
             panning: false,
@@ -418,13 +424,15 @@ impl Workspace {
             "pan" | "p" | "h" => self.set_mode(Mode::Pan),
             "docs" | "doc" => self.request = Some(Request::Docs),
             "code" => self.request = Some(Request::Code),
+            "latex" | "tex" => self.copy_latex(),
+            "ipynb" | "notebook" => self.save_notebook(),
             "clear" => {
                 self.board.selection = self.board.viewports.iter().map(|v| v.uid).collect();
                 self.delete_selection();
             }
             "help" | "?" => {
                 self.say("Tools: type an alias (LOR, BEZ, MAN, VOR, LIF, BUB ...) or a tool name to place it.");
-                self.say("Commands: fit, focus, zoom <pct>, del, dup, undo, redo, all, grid, snap, ortho, pan, select, docs, code, clear.");
+                self.say("Commands: fit, focus, zoom <pct>, del, dup, undo, redo, all, grid, snap, ortho, pan, select, docs, code, latex, ipynb, clear.");
             }
             _ => {
                 // A tool: by alias, id or name. "place lorenz" works too.
@@ -445,6 +453,32 @@ impl Workspace {
             }
         }
         true
+    }
+
+    /// Put the selected viewport's equations, with its current values, on
+    /// the clipboard as LaTeX.
+    fn copy_latex(&mut self) {
+        let Some(vp) = self.board.primary().and_then(|uid| self.board.get(uid)) else {
+            self.say("latex: select a viewport first");
+            return;
+        };
+        let text = latex::latex_snippet(&*vp.formula);
+        let label = vp.label();
+        self.clipboard = Some(text);
+        self.say(format!("Copied the LaTeX for {label} to the clipboard"));
+    }
+
+    /// Export the selected viewport as a Jupyter notebook.
+    fn save_notebook(&mut self) {
+        let Some(vp) = self.board.primary().and_then(|uid| self.board.get(uid)) else {
+            self.say("ipynb: select a viewport first");
+            return;
+        };
+        let msg = match notebook::for_formula(vp.tool.id, &*vp.formula) {
+            Some(nb) => export::saved_message(export::save(vp.tool.id, notebook::FILE_NAME, &nb)),
+            None => format!("No notebook export for {}", vp.tool.name),
+        };
+        self.say(msg);
     }
 
     // ---- Per-frame.
@@ -538,6 +572,9 @@ impl Workspace {
         self.view = view;
         let (now, dt, ppp) = ctx.input(|i| (i.time, i.stable_dt.min(0.1), i.pixels_per_point));
         self.now = now;
+        if let Some(text) = self.clipboard.take() {
+            ctx.copy_text(text);
+        }
         self.keys(&ctx);
 
         let (hover, shift, middle, delta, pinch, primary_down) = ctx.input(|i| {
@@ -1473,6 +1510,26 @@ mod tests {
         assert_eq!(ws.board.viewports.len(), 2);
         assert!(!ws.run_command("frobnicate"));
         assert!(ws.run_command("zoom 50"));
+    }
+
+    #[test]
+    fn latex_command_copies_the_selected_viewports_snippet() {
+        let mut ws = workspace();
+        assert!(ws.run_command("latex"));
+        assert!(ws.clipboard.is_none());
+        assert!(ws.log.last().unwrap().contains("select a viewport"));
+        ws.run_command("lissajous");
+        assert!(ws.run_command("latex"));
+        let copied = ws.clipboard.take().expect("snippet on the clipboard");
+        assert!(copied.starts_with("\\begin{gathered}"), "{copied}");
+        assert!(copied.contains("\\delta ="), "{copied}");
+    }
+
+    #[test]
+    fn ipynb_command_needs_a_selection() {
+        let mut ws = workspace();
+        assert!(ws.run_command("ipynb"));
+        assert!(ws.log.last().unwrap().contains("select a viewport"));
     }
 
     #[test]

@@ -6,14 +6,15 @@ use std::collections::HashMap;
 use egui::{Color32, Frame, Margin, RichText, ScrollArea, Stroke, TextEdit};
 
 use super::canvas::{Mode, Request, Workspace};
-use super::export;
 use super::highlight;
 use super::icons::{self, Ui as Icon};
 use super::markdown::{self, Block};
 use super::theme::{Chrome, mono};
+use super::{export, notebook};
 use crate::content::{self, Lang};
 use crate::formula::{Formula, Palette};
 use crate::formulas::{Tool, ToolEnv};
+use crate::latex;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Tab {
@@ -77,6 +78,18 @@ impl Inspector {
             return Some(t);
         }
         self.tool
+    }
+
+    /// The formula instance the panel is about: the selected viewport's own
+    /// (with its current parameters), or else a preview of the context tool.
+    pub fn context_formula<'a>(&'a mut self, ws: &'a Workspace) -> Option<&'a dyn Formula> {
+        if let Some(uid) = ws.board.primary()
+            && let Some(vp) = ws.board.get(uid)
+        {
+            return Some(&*vp.formula);
+        }
+        let tool = self.context(ws)?;
+        Some(self.preview(tool))
     }
 
     pub fn show(
@@ -193,7 +206,7 @@ impl Inspector {
                 ),
             },
             Tab::Code => match tool {
-                Some(t) => self.code(ui, t, chrome, now),
+                Some(t) => self.code(ui, ws, t, chrome, now),
                 None => hint(
                     ui,
                     chrome,
@@ -462,7 +475,14 @@ impl Inspector {
             });
     }
 
-    fn code(&mut self, ui: &mut egui::Ui, tool: &'static Tool, chrome: &Chrome, now: f64) {
+    fn code(
+        &mut self,
+        ui: &mut egui::Ui,
+        ws: &Workspace,
+        tool: &'static Tool,
+        chrome: &Chrome,
+        now: f64,
+    ) {
         Frame::new()
             .inner_margin(Margin::symmetric(10, 8))
             .show(ui, |ui| {
@@ -497,13 +517,11 @@ impl Inspector {
                     }
                     if icon_text_button(ui, Icon::Download, export::SAVE_LABEL, chrome).clicked() {
                         self.notice = Some((
-                            match export::save(tool.id, self.lang.file_name(), src) {
-                                Ok(path) if cfg!(target_arch = "wasm32") => {
-                                    format!("Downloaded {path}")
-                                }
-                                Ok(path) => format!("Saved {path}"),
-                                Err(e) => format!("Could not save: {e}"),
-                            },
+                            export::saved_message(export::save(
+                                tool.id,
+                                self.lang.file_name(),
+                                src,
+                            )),
                             now,
                         ));
                     }
@@ -513,6 +531,44 @@ impl Inspector {
                             .font(mono(10.5))
                             .color(chrome.text_dim),
                     );
+                });
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new("Also export")
+                            .font(mono(10.5))
+                            .color(chrome.text_dim),
+                    );
+                    if icon_text_button(ui, Icon::Copy, "LaTeX", chrome)
+                        .on_hover_text(
+                            "The equations with the current values, for a paper or notes",
+                        )
+                        .clicked()
+                        && let Some(f) = self.context_formula(ws)
+                    {
+                        let tex = latex::latex_snippet(f);
+                        export::copy(ui.ctx(), &tex);
+                        self.notice = Some(("Copied the LaTeX to the clipboard".into(), now));
+                    }
+                    if icon_text_button(ui, Icon::Download, "Notebook", chrome)
+                        .on_hover_text(
+                            "A Jupyter notebook: overview, equations and the Python code",
+                        )
+                        .clicked()
+                    {
+                        let nb = self
+                            .context_formula(ws)
+                            .and_then(|f| notebook::for_formula(tool.id, f));
+                        let msg = match nb {
+                            Some(nb) => export::saved_message(export::save(
+                                tool.id,
+                                notebook::FILE_NAME,
+                                &nb,
+                            )),
+                            None => "No notebook export for this tool".into(),
+                        };
+                        self.notice = Some((msg, now));
+                    }
                 });
                 if let Some((msg, at)) = &self.notice {
                     let age = (now - at) as f32;
@@ -664,4 +720,41 @@ fn icon_text_button(ui: &mut egui::Ui, icon: Icon, label: &str, chrome: &Chrome)
         chrome.text,
     );
     response
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cad::board::Board;
+    use crate::cad::camera::Camera;
+    use crate::cad::canvas::Settings;
+    use crate::formulas;
+
+    fn workspace() -> Workspace {
+        Workspace::new(Board::default(), Camera::default(), Settings::default())
+    }
+
+    #[test]
+    fn context_formula_is_the_selected_viewports_instance() {
+        let mut ws = workspace();
+        let tool = formulas::tool("lissajous").unwrap();
+        let uid = ws.place(tool, Some(egui::pos2(0.0, 0.0)), egui::Vec2::ZERO);
+        ws.board.selection = vec![uid];
+        let live: *const dyn Formula = &*ws.board.get(uid).unwrap().formula;
+        let mut inspector = Inspector::new(Tab::Code, Lang::Python);
+        let f = inspector.context_formula(&ws).unwrap();
+        assert!(std::ptr::addr_eq(f, live));
+    }
+
+    #[test]
+    fn context_formula_falls_back_to_a_preview() {
+        let mut ws = workspace();
+        let placed = formulas::tool("lissajous").unwrap();
+        ws.place(placed, Some(egui::pos2(0.0, 0.0)), egui::Vec2::ZERO);
+        ws.board.selection.clear();
+        let mut inspector = Inspector::new(Tab::Code, Lang::Python);
+        assert!(inspector.context_formula(&ws).is_none());
+        inspector.tool = formulas::tool("mandelbrot");
+        assert_eq!(inspector.context_formula(&ws).unwrap().id(), "mandelbrot");
+    }
 }

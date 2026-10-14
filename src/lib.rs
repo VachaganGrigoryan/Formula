@@ -10,6 +10,7 @@ pub mod content;
 pub mod draw;
 pub mod formula;
 pub mod formulas;
+pub mod latex;
 pub mod rng;
 
 pub use app::FormulaApp;
