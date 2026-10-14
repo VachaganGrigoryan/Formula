@@ -54,19 +54,24 @@ enum Eigen {
 
 fn eigen(m: Mat2) -> Eigen {
     let h = (m.a + m.d) / 2.0;
-    let disc = h * h - m.det();
-    let eps = 1e-6 * m.scale() * m.scale();
+    // (trace/2)^2 - det, written so it does not cancel catastrophically.
+    let disc = ((m.a - m.d) / 2.0).powi(2) + m.b * m.c;
+    let eps = 1e-7 * m.scale() * m.scale(); // closer roots count as one
     if disc < -eps {
         return Eigen::Complex(h, (-disc).sqrt());
     }
-    let lambdas = if disc <= eps { vec![h] } else { vec![h + disc.sqrt(), h - disc.sqrt()] };
+    let repeated = disc <= eps;
+    let lambdas = if repeated { vec![h] } else { vec![h + disc.sqrt(), h - disc.sqrt()] };
+    // A repeated root is only known to about sqrt(eps): treat a smaller
+    // A - lambda I as zero (a uniform scale), not as a shear.
+    let cutoff = if repeated { 4.0 * eps.sqrt() } else { 1e-6 };
     let mut pairs = Vec::new();
     for lambda in lambdas {
         // An eigenvector is perpendicular to a nonzero row of A - lambda I.
         let u = vec2(m.b, lambda - m.a);
         let w = vec2(lambda - m.d, m.c);
         let v = if u.length() >= w.length() { u } else { w };
-        if v.length() > 1e-6 {
+        if v.length() > cutoff {
             pairs.push((lambda, v.normalize()));
         }
     }
@@ -231,7 +236,8 @@ async fn main() {
             draw_circle(tip.x, tip.y, 7.0, color);
         }
 
-        let area = if det.abs() < 1e-4 * m.scale() * m.scale() {
+        // |det| = |col1| |col2| sin(angle): collapsed when the columns are parallel.
+        let area = if det.abs() <= 1e-4 * m.column(0).length() * m.column(1).length() {
             "det = 0: the plane collapses".to_owned()
         } else {
             format!("det = {det:.2}{}", if det < 0.0 { " (mirrored)" } else { "" })

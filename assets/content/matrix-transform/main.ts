@@ -25,11 +25,16 @@ type Eigen =
 
 function eigen(m: Mat2): Eigen {
   const h = (m.a + m.d) / 2;
-  const disc = h * h - det(m);
+  // (trace/2)^2 - det, written so it does not cancel catastrophically.
+  const disc = ((m.a - m.d) / 2) ** 2 + m.b * m.c;
   const scale = Math.max(1, Math.abs(m.a), Math.abs(m.b), Math.abs(m.c), Math.abs(m.d));
-  const eps = 1e-6 * scale * scale;
+  const eps = 1e-7 * scale * scale; // closer roots count as one
   if (disc < -eps) return { kind: "complex", re: h, im: Math.sqrt(-disc) };
-  const lambdas = disc <= eps ? [h] : [h + Math.sqrt(disc), h - Math.sqrt(disc)];
+  const repeated = disc <= eps;
+  const lambdas = repeated ? [h] : [h + Math.sqrt(disc), h - Math.sqrt(disc)];
+  // A repeated root is only known to about sqrt(eps): treat a smaller
+  // A - lambda I as zero (a uniform scale), not as a shear.
+  const cutoff = repeated ? 4 * Math.sqrt(eps) : 1e-6;
   const pairs: { lambda: number; v: Vec2 }[] = [];
   for (const lambda of lambdas) {
     // An eigenvector is perpendicular to a nonzero row of A - lambda I.
@@ -37,7 +42,7 @@ function eigen(m: Mat2): Eigen {
     const w = { x: lambda - m.d, y: m.c };
     const v = Math.hypot(u.x, u.y) >= Math.hypot(w.x, w.y) ? u : w;
     const n = Math.hypot(v.x, v.y);
-    if (n > 1e-6) pairs.push({ lambda, v: { x: v.x / n, y: v.y / n } });
+    if (n > cutoff) pairs.push({ lambda, v: { x: v.x / n, y: v.y / n } });
   }
   return pairs.length ? { kind: "real", pairs } : { kind: "all", lambda: h };
 }
@@ -157,8 +162,8 @@ function draw(): void {
   arrow(column(m, 0), ORANGE);
   arrow(column(m, 1), GREEN);
 
-  const scale = Math.max(1, Math.abs(m.a), Math.abs(m.b), Math.abs(m.c), Math.abs(m.d));
-  const area = Math.abs(d) < 1e-4 * scale * scale ? "det = 0: the plane collapses"
+  // |det| = |col1| |col2| sin(angle): collapsed when the columns are parallel.
+  const area = Math.abs(d) <= 1e-4 * Math.hypot(m.a, m.c) * Math.hypot(m.b, m.d) ? "det = 0: the plane collapses"
     : `det = ${d.toFixed(2)}` + (d < 0 ? " (mirrored)" : "");
   const f = (x: number): string => x.toFixed(2).padStart(6);
   ctx.fillStyle = "#e8ecef";

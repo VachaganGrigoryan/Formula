@@ -37,18 +37,23 @@ INTERVAL = 40     # milliseconds per frame
 def eigen(m):
     """('real', [(lam, v), ...]) largest first, ('all', lam) or ('complex', (re, im))."""
     h = (m[0, 0] + m[1, 1]) / 2
-    disc = h * h - np.linalg.det(m)
-    eps = 1e-6 * max(1.0, np.abs(m).max()) ** 2
+    # (trace/2)^2 - det, written so it does not cancel catastrophically.
+    disc = ((m[0, 0] - m[1, 1]) / 2) ** 2 + m[0, 1] * m[1, 0]
+    eps = 1e-7 * max(1.0, np.abs(m).max()) ** 2  # closer roots count as one
     if disc < -eps:
         return "complex", (h, np.sqrt(-disc))
-    lams = [h] if disc <= eps else [h + np.sqrt(disc), h - np.sqrt(disc)]
+    repeated = disc <= eps
+    lams = [h] if repeated else [h + np.sqrt(disc), h - np.sqrt(disc)]
+    # A repeated root is only known to about sqrt(eps): treat a smaller
+    # A - lam I as zero (a uniform scale), not as a shear.
+    cutoff = 4 * np.sqrt(eps) if repeated else 1e-6
     pairs = []
     for lam in lams:
         # An eigenvector is perpendicular to a nonzero row of A - lam I.
         u = np.array([m[0, 1], lam - m[0, 0]])
         w = np.array([lam - m[1, 1], m[1, 0]])
         v = u if np.hypot(*u) >= np.hypot(*w) else w
-        if np.hypot(*v) > 1e-6:
+        if np.hypot(*v) > cutoff:
             pairs.append((lam, v / np.hypot(*v)))
     return ("real", pairs) if pairs else ("all", h)
 
@@ -107,7 +112,8 @@ def update(_frame):
         text = f"lambda = {data:.2f}: every direction is an eigenvector"
     else:
         text = f"lambda = {data[0]:.2f} +- {data[1]:.2f}i: no real eigenvectors"
-    if abs(det) < 1e-4 * max(1.0, np.abs(m).max()) ** 2:
+    # |det| = |col1| |col2| sin(angle): collapsed when the columns are parallel.
+    if abs(det) <= 1e-4 * np.hypot(*m[:, 0]) * np.hypot(*m[:, 1]):
         area = "det = 0: the plane collapses"
     else:
         area = f"det = {det:.2f}" + (" (mirrored)" if det < 0 else "")

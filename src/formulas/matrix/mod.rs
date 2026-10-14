@@ -185,6 +185,7 @@ impl MatrixTransform {
         if self.chain.len() < MAX_STAGES {
             self.chain.push(Mat2::IDENTITY);
             self.selected = self.chain.len() - 1;
+            self.dragging = None;
             self.stop();
         }
     }
@@ -193,6 +194,7 @@ impl MatrixTransform {
         if self.chain.len() > 1 {
             self.chain.remove(self.selected);
             self.selected = self.selected.min(self.chain.len() - 1);
+            self.dragging = None;
             self.stop();
         }
     }
@@ -253,7 +255,12 @@ impl Formula for MatrixTransform {
     }
 
     fn stage_sense(&self) -> Sense {
-        Sense::drag()
+        // A chain's tips are not draggable; leave body drags to the canvas.
+        if self.tips_editable() {
+            Sense::drag()
+        } else {
+            Sense::hover()
+        }
     }
 
     fn is_animating(&self) -> bool {
@@ -262,6 +269,7 @@ impl Formula for MatrixTransform {
 
     fn interact(&mut self, response: &egui::Response, rect: Rect) {
         if !self.tips_editable() {
+            self.dragging = None;
             return;
         }
         let plane = Plane::new(rect);
@@ -323,7 +331,8 @@ impl Formula for MatrixTransform {
         let det = m.det();
         let rank = m.rank();
         if rank == 2 {
-            let square: Vec<Pos2> = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]
+            let square: Vec<Pos2> = Figure::Square
+                .outline()
                 .iter()
                 .map(|&p| screen(m.apply(p)))
                 .collect();
@@ -671,6 +680,27 @@ mod tests {
         let mut out = ctx.run_ui(Default::default(), |ui| f.controls(ui, &Palette::dark()));
         out.textures_delta.clear();
         assert_eq!(f.chain[0], Preset::Rotate.matrix());
+    }
+
+    /// With a chain the stage ignores drags, so it must not claim them:
+    /// dragging the body should move the viewport instead.
+    #[test]
+    fn a_chain_leaves_body_drags_to_the_canvas() {
+        let mut f = MatrixTransform::default();
+        assert!(f.stage_sense().senses_drag());
+        f.add_stage();
+        assert!(!f.stage_sense().senses_drag());
+    }
+
+    #[test]
+    fn changing_the_chain_ends_a_tip_drag() {
+        let mut f = MatrixTransform {
+            dragging: Some(0),
+            ..Default::default()
+        };
+        f.add_stage();
+        f.remove_stage();
+        assert_eq!(f.dragging, None);
     }
 
     #[test]

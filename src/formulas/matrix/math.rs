@@ -4,7 +4,7 @@ pub type Vec2 = [f32; 2];
 
 /// The matrix `[[a, b], [c, d]]`, acting on column vectors: its columns are
 /// where the basis vectors `i` and `j` land.
-#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Mat2 {
     pub a: f32,
     pub b: f32,
@@ -48,16 +48,15 @@ impl Mat2 {
     /// How many independent columns: 2 for an invertible matrix, 1 when the
     /// plane collapses onto a line, 0 when it collapses onto the origin.
     pub fn rank(self) -> u8 {
-        let s = self.scale();
-        if [self.a, self.b, self.c, self.d]
-            .iter()
-            .all(|x| x.abs() < 1e-6 * s)
-        {
-            0
-        } else if self.det().abs() < 1e-4 * s * s {
-            1
-        } else {
-            2
+        let col1 = self.a.hypot(self.c);
+        let col2 = self.b.hypot(self.d);
+        let tiny = 1e-6 * self.scale();
+        // |det| = |col1| |col2| sin(angle between them): compare the angle,
+        // so large or small entries do not decide the answer.
+        match (col1 > tiny, col2 > tiny) {
+            (false, false) => 0,
+            (true, true) if self.det().abs() > 1e-4 * col1 * col2 => 2,
+            _ => 1,
         }
     }
 
@@ -71,8 +70,11 @@ impl Mat2 {
     /// Eigenvalues from `λ² − tr λ + det = 0`, with their unit eigenvectors.
     pub fn eigen(self) -> Eigen {
         let half_trace = (self.a + self.d) / 2.0;
-        let disc = half_trace * half_trace - self.det();
-        let eps = 1e-6 * self.scale() * self.scale();
+        // (tr/2)² − det, written so that it does not cancel catastrophically.
+        let half_gap = (self.a - self.d) / 2.0;
+        let disc = half_gap * half_gap + self.b * self.c;
+        // Roots closer than about √eps are one repeated root.
+        let eps = 1e-7 * self.scale() * self.scale();
         if disc < -eps {
             Eigen::Complex {
                 re: half_trace,
@@ -82,19 +84,24 @@ impl Mat2 {
             let r = disc.sqrt();
             let values = [half_trace + r, half_trace - r];
             // Distinct eigenvalues always have an eigenvector each.
-            let vectors = values.map(|l| self.eigenvector(l).unwrap_or([1.0, 0.0]));
+            let vectors = values.map(|l| {
+                self.eigenvector(l, 1e-6 * self.scale())
+                    .unwrap_or([1.0, 0.0])
+            });
             Eigen::Real { values, vectors }
         } else {
+            // The root is only known to about √eps, so M − λI that small is
+            // indistinguishable from zero: a uniform scale, not a shear.
             Eigen::Repeated {
                 value: half_trace,
-                vector: self.eigenvector(half_trace),
+                vector: self.eigenvector(half_trace, 4.0 * eps.sqrt()),
             }
         }
     }
 
-    /// A unit vector in the null space of `M − λI`, or `None` when that is
-    /// the zero matrix (every vector is an eigenvector).
-    fn eigenvector(self, l: f32) -> Option<Vec2> {
+    /// A unit vector in the null space of `M − λI`, or `None` when that
+    /// matrix is zero to within `cutoff` (every vector is an eigenvector).
+    fn eigenvector(self, l: f32, cutoff: f32) -> Option<Vec2> {
         // Each candidate is perpendicular to one row of M − λI.
         let from_row1 = [self.b, l - self.a];
         let from_row2 = [l - self.d, self.c];
@@ -105,7 +112,7 @@ impl Mat2 {
             from_row2
         };
         let n = len(v);
-        (n > 1e-6 * self.scale()).then(|| [v[0] / n, v[1] / n])
+        (n > cutoff).then(|| [v[0] / n, v[1] / n])
     }
 }
 
@@ -269,6 +276,46 @@ mod tests {
             "nearly singular"
         );
         assert_eq!(Mat2::new(0.0, 0.0, 0.0, 0.0).rank(), 0);
+    }
+
+    /// The scale of the entries must not make an invertible matrix look
+    /// singular: diag(125, 0.008) keeps every area (det = 1).
+    #[test]
+    fn rank_ignores_how_large_the_entries_are() {
+        assert_eq!(Mat2::new(125.0, 0.0, 0.0, 0.008).rank(), 2);
+        assert_eq!(Mat2::new(125.0, 250.0, 0.5, 1.0).rank(), 1);
+    }
+
+    /// The first frames of a morph are nearly the identity. They must not
+    /// be reported as a shear with a single, arbitrary eigen direction.
+    #[test]
+    fn nearly_scalar_matrices_have_no_single_eigen_direction() {
+        for m in [
+            Mat2::new(1.000_15, 0.0, 0.0, 0.999_82),
+            Mat2::rotation(3e-4),
+            Preset::Scale.matrix().lerp(3e-4),
+        ] {
+            let e = m.eigen();
+            assert!(
+                !matches!(
+                    e,
+                    Eigen::Repeated {
+                        vector: Some(_),
+                        ..
+                    }
+                ),
+                "{m:?} → {e:?}"
+            );
+        }
+    }
+
+    /// Large chained products keep eigenvalues that are clearly apart.
+    #[test]
+    fn large_matrices_keep_distinct_eigenvalues() {
+        let Eigen::Real { values, .. } = Mat2::new(125.0, 0.0, 0.0, 124.9).eigen() else {
+            panic!("two distinct eigenvalues");
+        };
+        assert!((values[0] - 125.0).abs() < 1e-3 && (values[1] - 124.9).abs() < 1e-3);
     }
 
     #[test]
