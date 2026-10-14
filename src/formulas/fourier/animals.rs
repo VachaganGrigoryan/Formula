@@ -40,7 +40,7 @@ pub fn load() -> Vec<Animal> {
         .map(|a| Animal {
             name: a.n,
             group: a.g,
-            outline: a.p.chunks_exact(2).map(|c| [c[0], c[1]]).collect(),
+            outline: a.p.as_chunks::<2>().0.to_vec(),
         })
         .collect()
 }
