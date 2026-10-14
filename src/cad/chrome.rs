@@ -51,6 +51,7 @@ fn short(category: &str) -> &'static str {
         formulas::FRACTALS => "Generative",
         formulas::CHAOS => "Chaos",
         formulas::GEOMETRY => "Geometry",
+        formulas::LINEAR_ALGEBRA => "Matrices",
         formulas::STATISTICS => "Statistics",
         formulas::ANIMATION => "Easing",
         formulas::COLOR => "Color",
@@ -831,4 +832,17 @@ pub fn help_window(ctx: &egui::Context, p: &mut Panels, chrome: &Chrome) {
                     }
                 });
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A category without a short name shows up as "Other" in the toolbar.
+    #[test]
+    fn every_category_has_a_toolbar_name() {
+        for tool in formulas::TOOLS {
+            assert_ne!(short(tool.category), "Other", "{}", tool.category);
+        }
+    }
 }

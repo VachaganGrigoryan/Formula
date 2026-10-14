@@ -83,6 +83,16 @@ pub fn snap(v: Vec2, step: f32) -> Vec2 {
     v.map(|x| (x / step).round() * step)
 }
 
+/// The direction along the same line that points up (or right, if level),
+/// so labels land on the visible upper half of an eigen line.
+pub fn upward(v: Vec2) -> Vec2 {
+    if v[1] < 0.0 || (v[1] == 0.0 && v[0] < 0.0) {
+        [-v[0], -v[1]]
+    } else {
+        v
+    }
+}
+
 /// Where the plane's origin sits on screen and how many points one unit is.
 struct Plane {
     origin: Pos2,
@@ -93,7 +103,7 @@ impl Plane {
     fn new(rect: Rect) -> Self {
         Self {
             origin: rect.center() + vec2(0.0, rect.height() * 0.08),
-            unit: (rect.width().min(rect.height()) / 7.0).max(20.0),
+            unit: (rect.width().min(rect.height()) / 5.0).max(20.0),
         }
     }
 
@@ -341,6 +351,7 @@ impl Formula for MatrixTransform {
         // Eigenvectors: lines through the origin that map onto themselves.
         let small = FontId::proportional(13.0);
         let eigen_line = |v: Vec2, l: f32| {
+            let v = upward(v);
             let ends = [screen([-k * v[0], -k * v[1]]), screen([k * v[0], k * v[1]])];
             painter.extend(Shape::dashed_line(
                 &ends,
@@ -426,14 +437,25 @@ impl Formula for MatrixTransform {
             ),
             (eigen_caption, palette.muted),
         ];
-        for (n, (text, color)) in rows.into_iter().enumerate() {
-            painter.text(
-                base + vec2(0.0, 16.0 * n as f32),
-                Align2::LEFT_TOP,
-                text,
-                mono.clone(),
-                color,
-            );
+        // On a card, so the grid lines do not run through the text.
+        let galleys: Vec<_> = rows
+            .into_iter()
+            .map(|(text, color)| painter.layout_no_wrap(text, mono.clone(), color))
+            .collect();
+        let width = galleys.iter().map(|g| g.size().x).fold(0.0, f32::max);
+        let card = Rect::from_min_size(
+            base - vec2(8.0, 6.0),
+            vec2(width + 16.0, 16.0 * galleys.len() as f32 + 10.0),
+        );
+        painter.rect(
+            card,
+            6.0,
+            palette.card.gamma_multiply(0.92),
+            Stroke::new(1.0, palette.rule),
+            egui::StrokeKind::Inside,
+        );
+        for (n, galley) in galleys.into_iter().enumerate() {
+            painter.galley(base + vec2(0.0, 16.0 * n as f32), galley, palette.ink);
         }
     }
 
@@ -473,9 +495,7 @@ impl Formula for MatrixTransform {
                     ("d", &mut m.d),
                 ] {
                     ui.label(name);
-                    changed |= ui
-                        .add(egui::Slider::new(v, -LIMIT..=LIMIT).step_by(0.05))
-                        .changed();
+                    changed |= ui.add(egui::Slider::new(v, -LIMIT..=LIMIT)).changed();
                     ui.end_row();
                 }
             });
@@ -518,6 +538,13 @@ mod tests {
         assert_eq!(m, Mat2::new(2.0, 0.0, 1.0, 1.0));
         let m = set_column(m, 1, [-1.0, 3.0]);
         assert_eq!(m, Mat2::new(2.0, -1.0, 1.0, 3.0));
+    }
+
+    #[test]
+    fn eigen_labels_go_on_the_upper_end_of_their_line() {
+        assert_eq!(upward([0.0, -1.0]), [0.0, 1.0]);
+        assert_eq!(upward([-1.0, 0.0]), [1.0, 0.0]);
+        assert_eq!(upward([-0.6, 0.8]), [-0.6, 0.8]);
     }
 
     #[test]
@@ -577,6 +604,73 @@ mod tests {
         f.remove_stage();
         assert_eq!(f.chain.len(), MAX_STAGES - 1);
         assert!(f.selected < f.chain.len());
+    }
+
+    /// Dragging the tip of `i` on the canvas moves the first column, through
+    /// the workspace's real input routing.
+    #[test]
+    fn dragging_the_i_tip_on_the_canvas_edits_the_matrix() {
+        use crate::cad::board::Board;
+        use crate::cad::camera::Camera;
+        use crate::cad::canvas::{Settings, Workspace};
+        use crate::cad::theme::{Chrome, palette};
+        use egui::{Event, PointerButton, RawInput};
+
+        let mut ws = Workspace::new(Board::default(), Camera::default(), Settings::default());
+        let tool = crate::formulas::tool("matrix-transform").unwrap();
+        let uid = ws.place(tool, Some(pos2(0.0, 0.0)), egui::Vec2::ZERO);
+        ws.board.selection = vec![uid];
+        let rect = ws.board.get(uid).unwrap().rect;
+        ws.camera.center = rect.center();
+        let ctx = egui::Context::default();
+        let (chrome, pal) = (Chrome::graphite(), palette(true));
+        let run = |ws: &mut Workspace, events: Vec<Event>| {
+            let input = RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 1000.0))),
+                events,
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(input, |ui| {
+                egui::CentralPanel::default().show(ui, |ui| ws.show(ui, &chrome, &pal));
+            });
+            out.textures_delta.clear();
+        };
+        run(&mut ws, vec![]);
+        let to_screen = ws.camera.transform(ws.view, 1.0);
+        let plane = Plane::new(rect);
+        // The default matrix sends i to (1.5, 0.25); drag it to (2, 1).
+        let from = to_screen.mul_pos(plane.to_screen([1.5, 0.25]));
+        let to = to_screen.mul_pos(plane.to_screen([2.0, 1.0]));
+        let button = |pos, pressed| Event::PointerButton {
+            pos,
+            button: PointerButton::Primary,
+            pressed,
+            modifiers: Default::default(),
+        };
+        run(&mut ws, vec![Event::PointerMoved(from)]);
+        run(&mut ws, vec![button(from, true)]);
+        for k in 1..=10 {
+            run(
+                &mut ws,
+                vec![Event::PointerMoved(from.lerp(to, k as f32 / 10.0))],
+            );
+        }
+        run(&mut ws, vec![button(to, false)]);
+        let params = ws.board.get(uid).unwrap().formula.params();
+        assert_eq!((params[0].1, params[2].1), (2.0, 1.0), "{params:?}");
+    }
+
+    /// Showing the sliders must not round a preset's exact entries.
+    #[test]
+    fn controls_leave_preset_values_exact() {
+        let mut f = MatrixTransform {
+            chain: vec![Preset::Rotate.matrix()],
+            ..Default::default()
+        };
+        let ctx = egui::Context::default();
+        let mut out = ctx.run_ui(Default::default(), |ui| f.controls(ui, &Palette::dark()));
+        out.textures_delta.clear();
+        assert_eq!(f.chain[0], Preset::Rotate.matrix());
     }
 
     #[test]
