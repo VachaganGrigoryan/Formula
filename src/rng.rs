@@ -8,8 +8,14 @@ pub struct Rng(u64);
 
 impl Rng {
     pub fn new(seed: u64) -> Self {
-        // A zero state would stay zero forever.
-        Self(seed ^ 0x9E37_79B9_7F4A_7C15 | 1)
+        // SplitMix64's mix is a bijection, so distinct seeds give distinct
+        // states and neighbouring seeds land far apart. A zero state would
+        // stay zero forever.
+        let mut z = seed.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^= z >> 31;
+        Self(if z == 0 { 0x9E37_79B9_7F4A_7C15 } else { z })
     }
 
     pub fn next_u64(&mut self) -> u64 {
@@ -48,6 +54,27 @@ mod tests {
             assert!((0.0..1.0).contains(&x));
             assert!(a.index(5) < 5 && b.index(5) < 5);
         }
+    }
+
+    /// Every control that reseeds by adding 1 relies on neighbouring seeds
+    /// giving different sequences.
+    #[test]
+    fn neighbouring_seeds_give_different_sequences() {
+        for s in 0..1000 {
+            assert_ne!(
+                Rng::new(s).next_u64(),
+                Rng::new(s + 1).next_u64(),
+                "seeds {s} and {}",
+                s + 1
+            );
+        }
+    }
+
+    #[test]
+    fn distinct_seeds_give_distinct_states() {
+        let firsts: std::collections::HashSet<u64> =
+            (0..10_000).map(|s| Rng::new(s).next_u64()).collect();
+        assert_eq!(firsts.len(), 10_000);
     }
 
     #[test]

@@ -157,6 +157,17 @@ mod tests {
         }
     }
 
+    /// Every press of Shuffle gives a new order, not every second one.
+    #[test]
+    fn consecutive_shuffles_differ() {
+        let mut d = Dataset::new();
+        for _ in 0..10 {
+            let before = d.values().to_vec();
+            d.shuffle();
+            assert_ne!(d.values(), before.as_slice());
+        }
+    }
+
     #[test]
     fn changes_bump_generation() {
         let mut d = Dataset::new();

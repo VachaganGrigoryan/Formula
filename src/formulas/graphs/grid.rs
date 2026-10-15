@@ -186,15 +186,13 @@ impl Grid {
 
     /// A maze from the next seed in this grid's own sequence.
     pub fn maze_next(&mut self) {
-        // Steps of two: `Rng::new` ignores the low seed bit.
-        self.seed = self.seed.wrapping_add(2);
+        self.seed = self.seed.wrapping_add(1);
         self.maze(self.seed);
     }
 
     /// Random walls from the next seed in this grid's own sequence.
     pub fn scatter_next(&mut self, density: f32) {
-        // Steps of two: `Rng::new` ignores the low seed bit.
-        self.seed = self.seed.wrapping_add(2);
+        self.seed = self.seed.wrapping_add(1);
         self.scatter(self.seed, density);
     }
 
@@ -334,13 +332,17 @@ mod tests {
     #[test]
     fn successive_presets_use_new_seeds() {
         let mut g = Grid::new(GRID_W, GRID_H);
+        let walls = |g: &Grid| (0..g.len()).map(|i| g.is_wall(i)).collect::<Vec<_>>();
         g.maze_next();
-        let a = g.clone();
+        let a = walls(&g);
         g.maze_next();
-        assert_ne!(a, g, "a second press changes the maze");
-        let b = g.clone();
+        assert_ne!(a, walls(&g), "a second press changes the maze");
+        let b = walls(&g);
         g.scatter_next(0.28);
-        assert_ne!(b, g);
+        let c = walls(&g);
+        assert_ne!(b, c);
+        g.scatter_next(0.28);
+        assert_ne!(c, walls(&g), "a second press changes the walls");
     }
 
     #[test]
