@@ -5,6 +5,7 @@ pub mod grid;
 pub mod mst;
 pub mod path;
 pub mod pathfinding;
+pub mod spanning;
 pub mod tree;
 
 use std::cell::RefCell;

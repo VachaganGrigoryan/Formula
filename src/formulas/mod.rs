@@ -104,6 +104,13 @@ fn path<const S: usize>(env: &ToolEnv) -> Box<dyn Formula> {
     ))
 }
 
+fn mst<const S: usize>(env: &ToolEnv) -> Box<dyn Formula> {
+    Box::new(graphs::spanning::SpanningTree::new(
+        graphs::mst::Spanning::ALL[S],
+        env.graphs.clone(),
+    ))
+}
+
 fn race(env: &ToolEnv) -> Box<dyn Formula> {
     Box::new(sorting::race::Race::new(env.sorting.clone()))
 }
@@ -293,6 +300,8 @@ pub static TOOLS: &[Tool] = &[
         "BST",
         new::<graphs::bst::SearchTree>
     ),
+    tool!("kruskal", "Kruskal's algorithm", GRAPHS, "KRU", mst::<0>),
+    tool!("prim", "Prim's algorithm", GRAPHS, "PRI", mst::<1>),
 ];
 
 /// The tool with this id.

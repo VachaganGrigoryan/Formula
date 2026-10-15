@@ -60,6 +60,14 @@ impl Graph {
         self.generation
     }
 
+    /// Replaces the graph with a fresh random one. The generation keeps
+    /// counting up, so viewports sharing this graph notice and re-record.
+    pub fn regenerate(&mut self, n: usize, seed: u64) {
+        let generation = self.generation + 1;
+        *self = Graph::random(n, seed);
+        self.generation = generation;
+    }
+
     /// Moves point `i`, keeping it in the square and off every other point.
     pub fn move_point(&mut self, i: usize, p: [f32; 2]) {
         let mut p = [p[0].clamp(0.02, 0.98), p[1].clamp(0.02, 0.98)];
@@ -310,6 +318,17 @@ impl Replay for MstState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn regenerating_bumps_the_generation_and_replaces_the_points() {
+        let mut g = Graph::random(14, 7);
+        g.move_point(0, [0.5, 0.5]);
+        let before = g.generation();
+        g.regenerate(9, 3);
+        assert_eq!(g.generation(), before + 1);
+        assert_eq!(g.points().len(), 9);
+        assert_eq!(g.points(), Graph::random(9, 3).points());
+    }
 
     fn weight(g: &Graph, edges: &[usize]) -> f32 {
         edges.iter().map(|&e| g.edges()[e].w).sum()

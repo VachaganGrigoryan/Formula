@@ -55,6 +55,10 @@ module, keep the math in plain functions with tests, separate from `paint`/`cont
 Today that is only `sorting::Session`: one shared list (and audio output) per sheet, so a shuffle
 shows up in every sorting viewport and in the race.
 
+**Step-through algorithms.** `formulas/replay.rs` (`Replay`, `Player`, `transport`, `transport_keys`)
+plays any recorded op log; sorting, pathfinding and MST use op logs, the BST replays snapshot frames
+through `FrameIndex`. `ToolEnv.graphs` shares one grid and one graph per board.
+
 **Persistence.** `app.rs` saves a `Saved` struct under the eframe storage key `"board-v1"`. It
 holds the viewport layout (`board::ViewportModel`: uid, tool id, rect, title, locked, hidden), the
 camera, settings, theme, panel visibility, and the inspector tab/lang. A formula's own state is

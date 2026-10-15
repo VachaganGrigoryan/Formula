@@ -380,6 +380,33 @@ pub fn tool(painter: &Painter, rect: Rect, id: &str, color: Color32) {
             p.dot(0.16, 0.84, 0.07);
             p.dot(0.84, 0.84, 0.07);
         }
+        "kruskal" => {
+            // Four dots: three thick tree edges and one thin rejected edge.
+            let thick = Pen {
+                stroke: Stroke::new(p.stroke.width * 2.2, color),
+                painter: p.painter,
+                rect: p.rect,
+                color,
+            };
+            thick.line(&[(0.15, 0.7), (0.4, 0.25)]);
+            thick.line(&[(0.4, 0.25), (0.85, 0.35)]);
+            thick.line(&[(0.85, 0.35), (0.7, 0.8)]);
+            p.line(&[(0.15, 0.7), (0.7, 0.8)]);
+            p.dot(0.15, 0.7, 0.08);
+            p.dot(0.4, 0.25, 0.08);
+            p.dot(0.85, 0.35, 0.08);
+            p.dot(0.7, 0.8, 0.08);
+        }
+        "prim" => {
+            // A dot with edges growing out to three dots.
+            p.line(&[(0.2, 0.5), (0.55, 0.2)]);
+            p.line(&[(0.2, 0.5), (0.6, 0.55)]);
+            p.line(&[(0.6, 0.55), (0.85, 0.85)]);
+            p.dot(0.2, 0.5, 0.1);
+            p.dot(0.55, 0.2, 0.08);
+            p.dot(0.6, 0.55, 0.08);
+            p.dot(0.85, 0.85, 0.08);
+        }
         "a-star" => {
             // A five-pointed star with a dot target at its centre.
             let pts: Vec<(f32, f32)> = (0..10)
