@@ -453,4 +453,24 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn dragging_onto_a_row_at_the_right_edge_wraps_to_the_left() {
+        let mut g = Graph::random(14, 7);
+        let n = g.points().len();
+        // A row 0.015 apart ending at the right edge: the walk from its start
+        // runs off x = 0.98 and has to wrap to 0.02.
+        for i in 0..n - 1 {
+            g.move_point(i, [0.98 - 0.015 * i as f32, 0.5]);
+        }
+        let start = 0.98 - 0.015 * (n - 2) as f32;
+        g.move_point(n - 1, [start, 0.5]);
+        let p = g.points()[n - 1];
+        assert!(p[0] < start, "wrapped to the left of the row: {p:?}");
+        for q in g.points() {
+            assert!((0.02..=0.98).contains(&q[0]) && (0.02..=0.98).contains(&q[1]));
+        }
+        assert!(all_apart(&g));
+        assert!(g.edges().iter().all(|e| e.w.is_finite() && e.w > 0.0));
+    }
 }
