@@ -10,6 +10,7 @@ pub mod easing;
 pub mod flowfield;
 pub mod force;
 pub mod fourier;
+pub mod graphs;
 pub mod lerp;
 pub mod life;
 pub mod lissajous;
@@ -21,6 +22,7 @@ pub mod normalize;
 pub mod polar;
 pub mod projection;
 pub mod regression;
+pub mod replay;
 pub mod rotation;
 pub mod sorting;
 pub mod voronoi;
@@ -40,6 +42,7 @@ pub const ANIMATION: &str = "Animation & Easing";
 pub const COLOR: &str = "Color & Accessibility";
 pub const LINEAR_ALGEBRA: &str = "Linear Algebra";
 pub const SORTING: &str = "Sorting";
+pub const GRAPHS: &str = "Graphs & Trees";
 
 /// Shown on first launch, before a choice has been remembered.
 pub const DEFAULT_ID: &str = "fourier-epicycles";
@@ -49,12 +52,16 @@ pub struct ToolEnv {
     /// One sorting session per board, so every sorting viewport works on the
     /// same list and shares one audio output.
     pub sorting: sorting::Session,
+    /// One pathfinding grid and one MST graph per board, shared by the graph
+    /// and tree tools.
+    pub graphs: graphs::Session,
 }
 
 impl ToolEnv {
     pub fn new() -> Self {
         Self {
             sorting: sorting::Session::new(),
+            graphs: graphs::Session::new(),
         }
     }
 }
@@ -89,6 +96,20 @@ fn new<T: Formula + Default + 'static>(_: &ToolEnv) -> Box<dyn Formula> {
 fn sort<const A: usize>(env: &ToolEnv) -> Box<dyn Formula> {
     let alg = sorting::algorithms::Algorithm::ALL[A];
     Box::new(sorting::SortVisualizer::new(alg, env.sorting.clone()))
+}
+
+fn path<const S: usize>(env: &ToolEnv) -> Box<dyn Formula> {
+    Box::new(graphs::pathfinding::Pathfinding::new(
+        graphs::path::Search::ALL[S],
+        env.graphs.clone(),
+    ))
+}
+
+fn mst<const S: usize>(env: &ToolEnv) -> Box<dyn Formula> {
+    Box::new(graphs::spanning::SpanningTree::new(
+        graphs::mst::Spanning::ALL[S],
+        env.graphs.clone(),
+    ))
 }
 
 fn race(env: &ToolEnv) -> Box<dyn Formula> {
@@ -269,6 +290,19 @@ pub static TOOLS: &[Tool] = &[
     tool!("heap-sort", "Heap sort", SORTING, "HEP", sort::<6>),
     tool!("counting-sort", "Counting sort", SORTING, "CNT", sort::<7>),
     tool!("sorting-race", "Sorting race", SORTING, "RCE", race),
+    tool!("bfs", "Breadth-first search", GRAPHS, "BFS", path::<0>),
+    tool!("dfs", "Depth-first search", GRAPHS, "DFS", path::<1>),
+    tool!("dijkstra", "Dijkstra's algorithm", GRAPHS, "DIJ", path::<2>),
+    tool!("a-star", "A* search", GRAPHS, "AST", path::<3>),
+    tool!(
+        "binary-search-tree",
+        "Binary search tree",
+        GRAPHS,
+        "BST",
+        new::<graphs::bst::SearchTree>
+    ),
+    tool!("kruskal", "Kruskal's algorithm", GRAPHS, "KRU", mst::<0>),
+    tool!("prim", "Prim's algorithm", GRAPHS, "PRI", mst::<1>),
 ];
 
 /// The tool with this id.

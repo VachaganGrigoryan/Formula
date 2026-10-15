@@ -314,6 +314,111 @@ pub fn tool(painter: &Painter, rect: Rect, id: &str, color: Color32) {
                 .collect();
             painter.add(Shape::convex_polygon(pts, color, Stroke::NONE));
         }
+        "bfs" => {
+            // A 3x3 dot grid with rings spreading from the left-middle dot.
+            for (x, y) in [
+                (0.5, 0.18),
+                (0.5, 0.5),
+                (0.5, 0.82),
+                (0.84, 0.18),
+                (0.84, 0.5),
+                (0.84, 0.82),
+            ] {
+                p.dot(x, y, 0.05);
+            }
+            p.dot(0.16, 0.18, 0.05);
+            p.dot(0.16, 0.5, 0.08);
+            p.dot(0.16, 0.82, 0.05);
+            p.curve(16, |t| {
+                let a = -PI / 2.0 + t * PI;
+                (0.16 + 0.2 * a.cos(), 0.5 + 0.2 * a.sin())
+            });
+            p.curve(16, |t| {
+                let a = -PI / 2.0 + t * PI;
+                (0.16 + 0.34 * a.cos(), 0.5 + 0.34 * a.sin())
+            });
+        }
+        "dfs" => {
+            // One long zigzag diving to the bottom-right, ending in a dot.
+            p.line(&[
+                (0.12, 0.12),
+                (0.5, 0.12),
+                (0.5, 0.34),
+                (0.16, 0.34),
+                (0.16, 0.56),
+                (0.5, 0.56),
+                (0.5, 0.78),
+                (0.86, 0.78),
+            ]);
+            p.dot(0.12, 0.12, 0.06);
+            p.dot(0.86, 0.78, 0.08);
+        }
+        "dijkstra" => {
+            // Three dots joined by lines; the shortest leg is drawn thick.
+            let thick = Pen {
+                stroke: Stroke::new(p.stroke.width * 2.2, color),
+                painter: p.painter,
+                rect: p.rect,
+                color,
+            };
+            p.line(&[(0.15, 0.75), (0.5, 0.2)]);
+            p.line(&[(0.5, 0.2), (0.85, 0.75)]);
+            thick.line(&[(0.15, 0.75), (0.85, 0.75)]);
+            p.dot(0.15, 0.75, 0.08);
+            p.dot(0.5, 0.2, 0.08);
+            p.dot(0.85, 0.75, 0.08);
+        }
+        "binary-search-tree" => {
+            // A root with two children and two grandchildren joined by lines.
+            p.line(&[(0.5, 0.18), (0.28, 0.5)]);
+            p.line(&[(0.5, 0.18), (0.72, 0.5)]);
+            p.line(&[(0.28, 0.5), (0.16, 0.84)]);
+            p.line(&[(0.72, 0.5), (0.84, 0.84)]);
+            p.dot(0.5, 0.18, 0.09);
+            p.dot(0.28, 0.5, 0.08);
+            p.dot(0.72, 0.5, 0.08);
+            p.dot(0.16, 0.84, 0.07);
+            p.dot(0.84, 0.84, 0.07);
+        }
+        "kruskal" => {
+            // Four dots: three thick tree edges and one thin rejected edge.
+            let thick = Pen {
+                stroke: Stroke::new(p.stroke.width * 2.2, color),
+                painter: p.painter,
+                rect: p.rect,
+                color,
+            };
+            thick.line(&[(0.15, 0.7), (0.4, 0.25)]);
+            thick.line(&[(0.4, 0.25), (0.85, 0.35)]);
+            thick.line(&[(0.85, 0.35), (0.7, 0.8)]);
+            p.line(&[(0.15, 0.7), (0.7, 0.8)]);
+            p.dot(0.15, 0.7, 0.08);
+            p.dot(0.4, 0.25, 0.08);
+            p.dot(0.85, 0.35, 0.08);
+            p.dot(0.7, 0.8, 0.08);
+        }
+        "prim" => {
+            // A dot with edges growing out to three dots.
+            p.line(&[(0.2, 0.5), (0.55, 0.2)]);
+            p.line(&[(0.2, 0.5), (0.6, 0.55)]);
+            p.line(&[(0.6, 0.55), (0.85, 0.85)]);
+            p.dot(0.2, 0.5, 0.1);
+            p.dot(0.55, 0.2, 0.08);
+            p.dot(0.6, 0.55, 0.08);
+            p.dot(0.85, 0.85, 0.08);
+        }
+        "a-star" => {
+            // A five-pointed star with a dot target at its centre.
+            let pts: Vec<(f32, f32)> = (0..10)
+                .map(|k| {
+                    let a = -PI / 2.0 + k as f32 * PI / 5.0;
+                    let r = if k % 2 == 0 { 0.42 } else { 0.18 };
+                    (0.5 + r * a.cos(), 0.54 + r * a.sin())
+                })
+                .collect();
+            p.closed(&pts);
+            p.dot(0.5, 0.54, 0.06);
+        }
         "bubble-sort" => p.bars(&[0.3, 0.55, 0.45, 0.8, 1.0], &[1, 2]),
         "selection-sort" => {
             p.bars(&[0.25, 0.5, 0.9, 0.15, 0.7], &[3]);

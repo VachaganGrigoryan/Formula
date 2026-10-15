@@ -541,6 +541,13 @@ impl State {
     }
 }
 
+impl crate::formulas::replay::Replay for State {
+    type Op = Op;
+    fn apply(&mut self, op: Op) {
+        State::apply(self, op)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

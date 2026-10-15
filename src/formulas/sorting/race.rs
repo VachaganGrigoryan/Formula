@@ -26,9 +26,9 @@ struct Lane {
 impl Lane {
     fn new(alg: Algorithm, session: Session) -> Self {
         let mut view = SortVisualizer::new(alg, session);
-        view.playing = false;
+        view.player.playing = false;
         let mut finished = State::new(&view.initial);
-        for &op in &view.ops {
+        for &op in &view.player.ops {
             finished.apply(op);
         }
         let measured_us = alg.time_us(&view.initial);
@@ -41,7 +41,7 @@ impl Lane {
     }
 
     fn steps(&self) -> usize {
-        self.view.ops.len()
+        self.view.player.ops.len()
     }
 }
 
@@ -251,7 +251,7 @@ impl Formula for Race {
                 );
             }
             let v = &lane.view;
-            let s = &v.state;
+            let s = &v.player.state;
             let done = v.done();
 
             // Name, place and progress.
@@ -268,7 +268,7 @@ impl Formula for Race {
             } else {
                 format!(
                     "{:.0}%",
-                    100.0 * v.cursor as f32 / v.ops.len().max(1) as f32
+                    100.0 * v.player.cursor as f32 / v.player.ops.len().max(1) as f32
                 )
             };
             let status_color = if done && places[row] == 1 {
@@ -283,7 +283,7 @@ impl Formula for Race {
                 small.clone(),
                 status_color,
             );
-            let finish = v.ops.len() as f32 / self.speed;
+            let finish = v.player.ops.len() as f32 / self.speed;
             painter.text(
                 band.left_top() + vec2(0.0, 40.0),
                 Align2::LEFT_TOP,
