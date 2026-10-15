@@ -19,6 +19,9 @@ pub struct Grid {
     /// Bumped by every edit that changes something, so recordings made on an
     /// older state can tell they are stale.
     generation: u64,
+    /// Seed of the last generated preset, shared by every viewport so each
+    /// press gives a new layout.
+    seed: u64,
 }
 
 impl Grid {
@@ -32,6 +35,7 @@ impl Grid {
             start: 0,
             goal: 0,
             generation: 0,
+            seed: 0,
         };
         g.start = g.index(1, h / 2);
         g.goal = g.index(w - 2, h / 2);
@@ -88,9 +92,14 @@ impl Grid {
         self.generation += 1;
     }
 
-    /// Walls take no mud.
+    /// Walls take no mud, and mud never covers the start or goal.
     pub fn set_weight(&mut self, i: usize, w: u8) {
-        if i >= self.len() || self.walls[i] || self.weight[i] == w {
+        if i >= self.len()
+            || self.walls[i]
+            || i == self.start
+            || i == self.goal
+            || self.weight[i] == w
+        {
             return;
         }
         self.weight[i] = w;
@@ -173,6 +182,20 @@ impl Grid {
         self.walls[self.start] = false;
         self.walls[self.goal] = false;
         self.generation += 1;
+    }
+
+    /// A maze from the next seed in this grid's own sequence.
+    pub fn maze_next(&mut self) {
+        // Steps of two: `Rng::new` ignores the low seed bit.
+        self.seed = self.seed.wrapping_add(2);
+        self.maze(self.seed);
+    }
+
+    /// Random walls from the next seed in this grid's own sequence.
+    pub fn scatter_next(&mut self, density: f32) {
+        // Steps of two: `Rng::new` ignores the low seed bit.
+        self.seed = self.seed.wrapping_add(2);
+        self.scatter(self.seed, density);
     }
 
     /// Random walls with the given density; the markers stay open.
@@ -282,6 +305,12 @@ mod tests {
         assert_eq!(g.weight(i), 1);
         g.set_weight(i, MUD);
         assert_eq!(g.weight(i), 1, "walls take no mud");
+        let (s, t) = (g.start(), g.goal());
+        let before = g.generation();
+        g.set_weight(s, MUD);
+        g.set_weight(t, MUD);
+        assert_eq!((g.weight(s), g.weight(t)), (1, 1), "no mud on the markers");
+        assert_eq!(g.generation(), before);
     }
 
     #[test]
@@ -300,6 +329,18 @@ mod tests {
         let mut c = Grid::new(GRID_W, GRID_H);
         c.maze(1);
         assert_eq!(a, c, "same seed, same maze");
+    }
+
+    #[test]
+    fn successive_presets_use_new_seeds() {
+        let mut g = Grid::new(GRID_W, GRID_H);
+        g.maze_next();
+        let a = g.clone();
+        g.maze_next();
+        assert_ne!(a, g, "a second press changes the maze");
+        let b = g.clone();
+        g.scatter_next(0.28);
+        assert_ne!(b, g);
     }
 
     #[test]

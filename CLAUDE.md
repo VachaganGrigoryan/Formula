@@ -52,8 +52,9 @@ zoom. They just `paint` into the `rect` they are given.
 module, keep the math in plain functions with tests, separate from `paint`/`controls`.
 
 **Shared state between viewports.** `ToolEnv` carries state that instances on one board share.
-Today that is only `sorting::Session`: one shared list (and audio output) per sheet, so a shuffle
-shows up in every sorting viewport and in the race.
+`sorting::Session` is one shared list (and audio output) per sheet, so a shuffle shows up in every
+sorting viewport and in the race. `graphs::Session` is one pathfinding grid and one MST graph per
+sheet, so every search or MST viewport works on the same input.
 
 **Step-through algorithms.** `formulas/replay.rs` (`Replay`, `Player`, `transport`, `transport_keys`)
 plays any recorded op log; sorting, pathfinding and MST use op logs, the BST replays snapshot frames

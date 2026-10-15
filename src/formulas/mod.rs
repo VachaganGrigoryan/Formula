@@ -52,7 +52,8 @@ pub struct ToolEnv {
     /// One sorting session per board, so every sorting viewport works on the
     /// same list and shares one audio output.
     pub sorting: sorting::Session,
-    /// One pathfinding grid per board, shared by the graph tools.
+    /// One pathfinding grid and one MST graph per board, shared by the graph
+    /// and tree tools.
     pub graphs: graphs::Session,
 }
 

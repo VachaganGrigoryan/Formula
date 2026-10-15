@@ -77,12 +77,13 @@ In the worst case the frontier holds the widest ring of the graph, which on a gr
 
 - **Empty**, **Maze**, **Random walls**: presets for the shared grid. Maze carves a new random maze on every click; Random walls scatters walls with a density of 0.28.
 - **Paint mud (weight 5)**: switches the brush from walls to mud. BFS ignores the weight, but the other searches on the same grid do not.
-- **Drag on the grid**: draws or erases walls (the first cell you press decides which). Drag the orange **S** (start) or the green **G** (goal) to move it.
+- **Drag on the grid**: draws or erases walls (the first cell you press decides which). Drag the start (filled dot) or the goal (ring) to move it.
 - **Speed**: replay speed in recorded steps per second.
 - **Step**: scrubs to any point of the recording.
 - **Restart**, **Step back**, **Play / Pause**, **Step**, **Finish**: transport controls. Space plays or pauses, Left and Right step one operation.
-- **Legend**: wall, mud, frontier (waiting in the queue), visited, and path. The cell of the latest operation gets a dark outline.
-- The header shows the cells visited and the path length in steps, or reports that the goal is walled off.
+- **Legend**: wall, mud, frontier (waiting in the queue), visited, and path. Mud is a tint with an inset border that stays visible under the search colors, and the path is drawn on top of it. The cell of the latest operation gets a dark outline.
+- Visited cells show their `dist` when the cells are large enough (18 points or more).
+- The header shows the cells visited, and the path length in steps once a path is found, or reports that the goal is walled off.
 
 ## Numerical notes and pitfalls
 

@@ -82,8 +82,9 @@ How much A* saves depends entirely on how close `h` is to the true cost. A perfe
 - **Speed**: replay speed in recorded steps per second.
 - **Step**: scrubs to any point of the recording.
 - **Restart**, **Step back**, **Play / Pause**, **Step**, **Finish**: transport controls. Space plays or pauses, Left and Right step one operation.
-- **Legend**: wall, mud, frontier (waiting in the priority queue), visited, and path. The cell of the latest operation gets a dark outline.
-- The header shows the cells visited, the path length in steps, and the total **cost** of the path. Compare **visited** with the Dijkstra tool on the same grid.
+- **Legend**: wall, mud, frontier (waiting in the priority queue), visited, and path. Mud is a tint with an inset border that stays visible under the search colors, and the path is drawn on top of it. The cell of the latest operation gets a dark outline.
+- Visited cells show their `dist` (cost so far) when the cells are large enough (18 points or more).
+- The header shows the cells visited, and once a path is found its length in steps and its total **cost**. Compare **visited** with the Dijkstra tool on the same grid.
 
 ## Numerical notes and pitfalls
 

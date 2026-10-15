@@ -73,6 +73,7 @@ With a Fibonacci heap the time improves to O(E + V log V).
 - **points slider**: 6 to 24 points. It only takes effect when you press New points.
 - **Drag a vertex**: moves it (press within 14 points of it). The edges are recomputed, so the triangulation can change, and every viewport re-records and restarts from step 0. Vertices never end up on top of one another.
 - **Edge colors**: unseen edges are thin and light, the edge being considered is orange, accepted edges are thick blue, rejected edges are dashed and grey.
+- **Candidate edges**: when the stage is at least 560 points wide, a list titled "candidate edges by weight" shows the lightest ten edges still waiting in Prim's heap, which are the unseen edges with at least one end in the tree.
 - **Vertex fill**: vertices in the tree are filled blue; the others are hollow. The vertex that joined last gets an extra ring.
 - **Transport**: Restart, Step back, Play / Pause, Step, Finish, a speed slider up to 60 steps per second and a scrubber. Space plays or pauses, Left and Right step one operation.
 - The header reads the algorithm name, the tree weight so far and the accepted edges out of `n - 1`.

@@ -80,8 +80,9 @@ On a long corridor DFS keeps only one branch of unexplored neighbors per level o
 - **Speed**: replay speed in recorded steps per second.
 - **Step**: scrubs to any point of the recording.
 - **Restart**, **Step back**, **Play / Pause**, **Step**, **Finish**: transport controls. Space plays or pauses, Left and Right step one operation.
-- **Legend**: wall, mud, frontier (waiting on the stack), visited, and path. The cell of the latest operation gets a dark outline.
-- The header shows the cells visited and the path length in steps, or reports that the goal is walled off. Compare the path length with breadth-first search on the same grid.
+- **Legend**: wall, mud, frontier (waiting on the stack), visited, and path. Mud is a tint with an inset border that stays visible under the search colors, and the path is drawn on top of it. The cell of the latest operation gets a dark outline.
+- Visited cells show the `dist` they were reached with (steps along the route DFS took, not the shortest) when the cells are large enough (18 points or more).
+- The header shows the cells visited, and the path length in steps once a path is found, or reports that the goal is walled off. Compare the path length with breadth-first search on the same grid.
 
 ## Numerical notes and pitfalls
 
@@ -101,12 +102,13 @@ On a long corridor DFS keeps only one branch of unexplored neighbors per level o
 
 ## History
 
-Depth-first search as a way out of a maze goes back to Charles Pierre Tremaux, a French engineer who described the method in the 19th century: mark each passage you take, and never take a marked passage twice unless you are forced to back up. In 1972-73 Robert Tarjan and John Hopcroft showed how powerful the traversal is, publishing linear-time algorithms for biconnected components, strongly connected components and planarity testing built on DFS (Hopcroft and Tarjan, 1973).
+Depth-first search as a way out of a maze goes back to Charles Pierre Tremaux, a French engineer who described the method in the 19th century: mark each passage you take, and never take a marked passage twice unless you are forced to back up. In 1972-74 Robert Tarjan and John Hopcroft showed how powerful the traversal is, publishing linear-time algorithms for biconnected components, strongly connected components and planarity testing built on DFS (Hopcroft and Tarjan, 1973 and 1974).
 
 ## References
 
 - T. H. Cormen, C. E. Leiserson, R. L. Rivest and C. Stein, *Introduction to Algorithms* (CLRS), chapter 22, "Elementary Graph Algorithms".
 - R. Sedgewick and K. Wayne, *Algorithms*, 4th edition, section 4.1, "Undirected Graphs".
 - J. Hopcroft and R. Tarjan, "Algorithm 447: efficient algorithms for graph manipulation", Communications of the ACM, 1973.
+- J. Hopcroft and R. Tarjan, "Efficient planarity testing", Journal of the ACM, 1974.
 - R. Tarjan, "Depth-first search and linear graph algorithms", SIAM Journal on Computing, 1972.
 - Wikipedia, "Depth-first search".

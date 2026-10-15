@@ -239,8 +239,8 @@ impl Formula for SearchTree {
     }
 
     fn summary(&self) -> &'static str {
-        "keeps smaller keys on the left and larger on the right, so a search discards half \
-         the tree at every step; AVL rotations keep it from leaning"
+        "A binary search tree keeps smaller keys on the left and larger on the right, so a \
+         search discards half the tree at every step. AVL rotations keep it from leaning."
     }
 
     fn notes(&self) -> &'static str {

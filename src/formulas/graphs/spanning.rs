@@ -20,19 +20,19 @@ const SPEED: f32 = 60.0;
 const GRAB: f32 = 14.0;
 /// Vertex radius.
 const DOT: f32 = 7.0;
-/// Kruskal's side list needs a stage at least this wide.
+/// The side list needs a stage at least this wide.
 const LIST_FROM: f32 = 560.0;
-/// Width of Kruskal's side list.
+/// Width of the side list.
 const LIST_W: f32 = 150.0;
 /// How many upcoming edges the side list shows.
 const LIST_ROWS: usize = 10;
 
-/// The square the unit square of points is drawn in, and Kruskal's list
+/// The square the unit square of points is drawn in, and the side list
 /// column when there is room for it.
-fn layout(rect: Rect, kruskal: bool) -> (Rect, Option<Rect>) {
+fn layout(rect: Rect) -> (Rect, Option<Rect>) {
     let mut area = Rect::from_min_max(rect.min + vec2(0.0, HEADER), rect.max);
     let mut list = None;
-    if kruskal && rect.width() >= LIST_FROM {
+    if rect.width() >= LIST_FROM {
         list = Some(Rect::from_min_max(
             pos2(area.max.x - LIST_W, area.min.y),
             area.max,
@@ -72,7 +72,6 @@ pub struct SpanningTree {
     player: Player<MstState>,
     /// The point count the next "New points" uses.
     n: usize,
-    seed: u64,
     /// The vertex being dragged.
     drag: Option<usize>,
 }
@@ -86,7 +85,6 @@ impl SpanningTree {
             player: Player::new(MstState::new(&g), record(alg, &g), SPEED),
             generation: g.generation(),
             session,
-            seed: 7,
             drag: None,
         };
         s.sync();
@@ -190,8 +188,9 @@ impl SpanningTree {
         }
     }
 
-    /// Kruskal's upcoming edges in sorted order, with their weights.
-    fn paint_list(&self, painter: &egui::Painter, graph: &Graph, list: Rect, palette: &Palette) {
+    /// The edges still waiting, lightest first: Kruskal's upcoming edges, or
+    /// Prim's heap (every unseen edge with an endpoint already in the tree).
+    fn waiting(&self, graph: &Graph) -> Vec<usize> {
         let state = &self.player.state;
         let mut order: Vec<usize> = (0..graph.edges().len()).collect();
         order.sort_by(|&x, &y| {
@@ -200,17 +199,28 @@ impl SpanningTree {
                 .total_cmp(&graph.edges()[y].w)
                 .then(x.cmp(&y))
         });
+        order.retain(|&e| {
+            let edge = graph.edges()[e];
+            state.edges[e] == EdgeState::Unseen
+                && (self.alg == Spanning::Kruskal || state.in_tree[edge.a] || state.in_tree[edge.b])
+        });
+        order
+    }
+
+    /// The side list of waiting edges with their weights.
+    fn paint_list(&self, painter: &egui::Painter, graph: &Graph, list: Rect, palette: &Palette) {
+        let title = match self.alg {
+            Spanning::Kruskal => "next edges by weight",
+            Spanning::Prim => "candidate edges by weight",
+        };
         painter.text(
             list.min + vec2(8.0, 10.0),
             Align2::LEFT_CENTER,
-            "next edges by weight",
+            title,
             FontId::proportional(11.0),
             palette.muted,
         );
-        let upcoming = order
-            .into_iter()
-            .filter(|&e| state.edges[e] == EdgeState::Unseen)
-            .take(LIST_ROWS);
+        let upcoming = self.waiting(graph).into_iter().take(LIST_ROWS);
         for (row, e) in upcoming.enumerate() {
             let edge = graph.edges()[e];
             painter.text(
@@ -240,12 +250,12 @@ impl Formula for SpanningTree {
     fn summary(&self) -> &'static str {
         match self.alg {
             Spanning::Kruskal => {
-                "sorts the edges by weight and keeps each one that joins two separate trees, \
-                 merging a forest into one tree"
+                "Kruskal's algorithm sorts the edges by weight and keeps each one that joins two \
+                 separate trees, merging a forest into one tree."
             }
             Spanning::Prim => {
-                "grows a single tree from one vertex, always adding the lightest edge that \
-                 leaves it"
+                "Prim's algorithm grows a single tree from one vertex, always adding the \
+                 lightest edge that leaves it."
             }
         }
     }
@@ -295,7 +305,7 @@ impl Formula for SpanningTree {
     }
 
     fn interact(&mut self, response: &egui::Response, rect: Rect) {
-        let (square, _) = layout(rect, self.alg == Spanning::Kruskal);
+        let (square, _) = layout(rect);
         let pointer = response.interact_pointer_pos();
         if response.drag_started()
             && let Some(at) = pointer
@@ -327,7 +337,7 @@ impl Formula for SpanningTree {
         self.sync();
         self.player.advance(dt);
         let painter = painter.with_clip_rect(rect);
-        let (square, list) = layout(rect, self.alg == Spanning::Kruskal);
+        let (square, list) = layout(rect);
         let graph = self.session.graph.borrow();
 
         painter.text(
@@ -347,11 +357,7 @@ impl Formula for SpanningTree {
     fn controls(&mut self, ui: &mut egui::Ui, palette: &Palette) {
         ui.horizontal_wrapped(|ui| {
             if ui.button("New points").clicked() {
-                self.seed += 1;
-                self.session
-                    .graph
-                    .borrow_mut()
-                    .regenerate(self.n, self.seed);
+                self.session.graph.borrow_mut().regenerate_next(self.n);
             }
             ui.add(egui::Slider::new(&mut self.n, 6..=24).text("points"));
         });
@@ -421,5 +427,84 @@ mod tests {
         assert_eq!(k.player.cursor, 0);
         assert_eq!(k.generation, session.graph.borrow().generation());
         assert_eq!(p.generation, k.generation);
+    }
+
+    /// Whatever changes the edge count, `sync` must leave every state sized
+    /// for the current graph.
+    #[test]
+    fn sync_resizes_state_when_the_edge_count_changes() {
+        for alg in [Spanning::Kruskal, Spanning::Prim] {
+            let session = Session::new();
+            let mut v = SpanningTree::new(alg, session.clone());
+            let before = session.graph.borrow().edges().len();
+            let mut changed = false;
+            for k in 0..20 {
+                session.graph.borrow_mut().regenerate_next(6 + k);
+                v.sync();
+                let g = session.graph.borrow();
+                assert_eq!(v.player.state.edges.len(), g.edges().len());
+                assert_eq!(v.player.state.parent.len(), g.points().len());
+                assert_eq!(v.player.state.in_tree.len(), g.points().len());
+                changed |= g.edges().len() != before;
+            }
+            assert!(changed, "the edge count changed at least once");
+            // Moving a point can change the triangulation too.
+            for k in 0..30 {
+                let t = k as f32 / 30.0;
+                session.graph.borrow_mut().move_point(0, [t, 1.0 - t]);
+                v.sync();
+                let g = session.graph.borrow();
+                assert_eq!(v.player.state.edges.len(), g.edges().len());
+                assert_eq!(v.player.state.parent.len(), g.points().len());
+            }
+        }
+    }
+
+    #[test]
+    fn new_points_differ_across_viewports_sharing_a_board() {
+        let session = Session::new();
+        let _k = SpanningTree::new(Spanning::Kruskal, session.clone());
+        let _p = SpanningTree::new(Spanning::Prim, session.clone());
+        session.graph.borrow_mut().regenerate_next(14);
+        let a = session.graph.borrow().clone();
+        session.graph.borrow_mut().regenerate_next(14);
+        let b = session.graph.borrow().clone();
+        assert_ne!(a.points(), b.points());
+    }
+
+    #[test]
+    fn prim_candidates_are_the_unseen_edges_touching_the_tree() {
+        let session = Session::new();
+        let mut p = SpanningTree::new(Spanning::Prim, session.clone());
+        let n = p.player.ops.len();
+        let mut seen_nonempty = false;
+        for step in 0..=n {
+            p.player.seek(step);
+            let g = session.graph.borrow();
+            let waiting = p.waiting(&g);
+            // Replay Prim's heap independently: its size must match.
+            let st = &p.player.state;
+            let want = g
+                .edges()
+                .iter()
+                .enumerate()
+                .filter(|(i, e)| {
+                    st.edges[*i] == EdgeState::Unseen && (st.in_tree[e.a] || st.in_tree[e.b])
+                })
+                .count();
+            assert_eq!(waiting.len(), want);
+            assert!(
+                waiting
+                    .windows(2)
+                    .all(|w| { g.edges()[w[0]].w <= g.edges()[w[1]].w })
+            );
+            seen_nonempty |= !waiting.is_empty();
+        }
+        assert!(seen_nonempty);
+        let k = SpanningTree::new(Spanning::Kruskal, session.clone());
+        assert_eq!(
+            k.waiting(&session.graph.borrow()).len(),
+            session.graph.borrow().edges().len()
+        );
     }
 }

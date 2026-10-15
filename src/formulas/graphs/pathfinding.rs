@@ -57,7 +57,6 @@ pub struct Pathfinding {
     /// Brush mode: paint mud instead of walls.
     mud: bool,
     stroke: Option<Brush>,
-    seed: u64,
 }
 
 impl Pathfinding {
@@ -69,7 +68,6 @@ impl Pathfinding {
             player: Player::new(PathState::new(0), Vec::new(), SPEED),
             mud: false,
             stroke: None,
-            seed: 1,
         };
         p.sync();
         p
@@ -102,6 +100,18 @@ impl Pathfinding {
         }
     }
 
+    /// Choose the brush where the press began, not where the pointer is once
+    /// the drag threshold has passed, so a quick flick off a marker still
+    /// moves the marker.
+    fn begin_stroke(&mut self, rect: Rect, origin: Option<Pos2>, pointer_cell: Option<usize>) {
+        let cell = origin
+            .and_then(|p| cell_at(rect, GRID_W, GRID_H, p))
+            .or(pointer_cell);
+        if let Some(cell) = cell {
+            self.stroke = Some(self.choose_stroke(cell));
+        }
+    }
+
     fn apply_stroke(&self, stroke: Brush, cell: usize) {
         let mut grid = self.session.grid.borrow_mut();
         match stroke {
@@ -121,15 +131,13 @@ impl Pathfinding {
         if s.no_path {
             return "No path: the goal is walled off".to_owned();
         }
-        let mut text = format!(
-            "{}  ·  visited {}  ·  path {} steps",
-            self.search.name(),
-            s.visits,
-            self.path_steps()
-        );
-        if self.search.weighted() && !s.path.is_empty() {
-            let cost = path_cost(&self.session.grid.borrow(), self.search, &s.path);
-            text.push_str(&format!("  ·  cost {cost}"));
+        let mut text = format!("{}  ·  visited {}", self.search.name(), s.visits);
+        if !s.path.is_empty() {
+            text.push_str(&format!("  ·  path {} steps", self.path_steps()));
+            if self.search.weighted() {
+                let cost = path_cost(&self.session.grid.borrow(), self.search, &s.path);
+                text.push_str(&format!("  ·  cost {cost}"));
+            }
         }
         text
     }
@@ -151,19 +159,20 @@ impl Formula for Pathfinding {
     fn summary(&self) -> &'static str {
         match self.search {
             Search::Bfs => {
-                "explores in rings of equal distance, so the first path it finds is the \
-                 shortest in steps"
+                "Breadth-first search explores in rings of equal distance, so the first path it \
+                 finds is the shortest in steps."
             }
             Search::Dfs => {
-                "dives down one corridor before backing up; finds a path, rarely the shortest"
+                "Depth-first search dives down one corridor before backing up. It finds a path, \
+                 but rarely the shortest."
             }
             Search::Dijkstra => {
-                "settles cells in order of total cost, so mud (weight 5) is avoided when a \
-                 detour is cheaper"
+                "Dijkstra's algorithm settles cells in order of total cost, so mud (weight 5) is \
+                 avoided when a detour is cheaper."
             }
             Search::AStar => {
-                "is Dijkstra steered by a straight-line guess of the remaining distance, so \
-                 it visits fewer cells"
+                "A* is Dijkstra's algorithm steered by a straight-line guess of the remaining \
+                 distance, so it visits fewer cells."
             }
         }
     }
@@ -222,10 +231,9 @@ impl Formula for Pathfinding {
         let cell = response
             .interact_pointer_pos()
             .and_then(|p| cell_at(rect, GRID_W, GRID_H, p));
-        if (response.drag_started() || response.clicked())
-            && let Some(cell) = cell
-        {
-            self.stroke = Some(self.choose_stroke(cell));
+        if response.drag_started() || response.clicked() {
+            let origin = response.ctx.input(|i| i.pointer.press_origin());
+            self.begin_stroke(rect, origin, cell);
         }
         if let (Some(stroke), Some(cell)) = (self.stroke, cell)
             && (response.dragged() || response.clicked() || response.drag_started())
@@ -265,27 +273,38 @@ impl Formula for Pathfinding {
             }
             v
         };
-        let numbers = cell >= NUMBERS_FROM && self.search.weighted();
+        let numbers = cell >= NUMBERS_FROM;
         for (i, &path_cell) in on_path.iter().enumerate() {
             let (x, y) = grid.xy(i);
             let r = Rect::from_min_size(
                 board.min + vec2(x as f32 * cell, y as f32 * cell),
                 vec2(cell, cell),
             );
-            let fill = if grid.is_wall(i) {
-                palette.ink
-            } else if grid.weight(i) == MUD {
-                palette.y.gamma_multiply(0.35)
-            } else if path_cell {
-                palette.trace
-            } else if state.frontier[i] {
-                palette.x.gamma_multiply(0.55)
-            } else if state.visited[i] {
-                palette.fill
-            } else {
-                palette.paper
-            };
-            painter.rect_filled(r, 0.0, fill);
+            let wall = grid.is_wall(i);
+            let mud = !wall && grid.weight(i) == MUD;
+            // Mud is a tint under the search colors; the path sits on top.
+            painter.rect_filled(r, 0.0, if wall { palette.ink } else { palette.paper });
+            if mud {
+                painter.rect_filled(r, 0.0, palette.y.gamma_multiply(0.35));
+            }
+            if !wall {
+                if path_cell {
+                    painter.rect_filled(r, 0.0, palette.trace);
+                } else if state.frontier[i] {
+                    painter.rect_filled(r, 0.0, palette.x.gamma_multiply(0.55));
+                } else if state.visited[i] {
+                    painter.rect_filled(r, 0.0, palette.fill.gamma_multiply(0.7));
+                }
+            }
+            if mud {
+                // Keeps mud readable under every search color.
+                painter.rect_stroke(
+                    r.shrink(cell * 0.2),
+                    0.0,
+                    Stroke::new(1.0, palette.y),
+                    StrokeKind::Inside,
+                );
+            }
             if numbers
                 && state.visited[i]
                 && let Some(d) = state.dist[i]
@@ -345,12 +364,10 @@ impl Formula for Pathfinding {
                 grid.clear();
             }
             if ui.button("Maze").clicked() {
-                self.seed += 1;
-                grid.maze(self.seed);
+                grid.maze_next();
             }
             if ui.button("Random walls").clicked() {
-                self.seed += 1;
-                grid.scatter(self.seed, 0.28);
+                grid.scatter_next(0.28);
             }
         });
         ui.checkbox(&mut self.mud, "Paint mud (weight 5)");
@@ -382,7 +399,8 @@ impl Formula for Pathfinding {
         });
         ui.label(
             egui::RichText::new(
-                "Drag to draw walls, drag S or G to move them; Space, Left and Right step",
+                "Drag to draw walls or mud; drag the dot (start) or ring (goal) to move it; \
+                 Space, Left and Right step",
             )
             .small()
             .color(palette.muted),
@@ -410,6 +428,57 @@ mod tests {
         assert_eq!(cell_at(rect, 31, 19, p), Some(3 * 31 + 2));
         assert_eq!(cell_at(rect, 31, 19, board.min - vec2(1.0, 1.0)), None);
         assert_eq!(cell_at(rect, 31, 19, board.max + vec2(1.0, 1.0)), None);
+    }
+
+    #[test]
+    fn presets_differ_between_viewports_sharing_a_board() {
+        let session = Session::new();
+        let _a = Pathfinding::new(Search::Bfs, session.clone());
+        let _b = Pathfinding::new(Search::Dfs, session.clone());
+        session.grid.borrow_mut().maze_next();
+        let first = session.grid.borrow().clone();
+        session.grid.borrow_mut().maze_next();
+        let second = session.grid.borrow().clone();
+        assert_ne!(first, second);
+        session.grid.borrow_mut().scatter_next(0.28);
+        let third = session.grid.borrow().clone();
+        assert_ne!(second, third);
+        session.grid.borrow_mut().scatter_next(0.28);
+        assert_ne!(third, *session.grid.borrow());
+    }
+
+    #[test]
+    fn the_brush_is_chosen_where_the_press_began() {
+        let session = Session::new();
+        let mut v = Pathfinding::new(Search::Bfs, session.clone());
+        let rect = Rect::from_min_size(pos2(0.0, 0.0), vec2(620.0, 440.0));
+        let board = board_rect(rect, GRID_W, GRID_H);
+        let cell = board.width() / GRID_W as f32;
+        let centre = |i: usize| {
+            let (x, y) = session.grid.borrow().xy(i);
+            board.min + vec2((x as f32 + 0.5) * cell, (y as f32 + 0.5) * cell)
+        };
+        let (s, g) = (session.grid.borrow().start(), session.grid.borrow().goal());
+        // The pointer is already on an empty cell, but the press was on S.
+        let away = cell_at(rect, GRID_W, GRID_H, centre(s) + vec2(cell * 3.0, 0.0));
+        v.begin_stroke(rect, Some(centre(s)), away);
+        assert_eq!(v.stroke, Some(Brush::MoveStart));
+        v.begin_stroke(rect, Some(centre(g)), away);
+        assert_eq!(v.stroke, Some(Brush::MoveGoal));
+        v.begin_stroke(rect, None, away);
+        assert_eq!(v.stroke, Some(Brush::Walls(true)));
+    }
+
+    #[test]
+    fn the_header_shows_a_path_only_once_there_is_one() {
+        let session = Session::new();
+        let mut v = Pathfinding::new(Search::Bfs, session.clone());
+        assert!(!v.header().contains("path"), "{}", v.header());
+        v.player.seek(v.player.ops.len());
+        assert!(v.header().contains("path"), "{}", v.header());
+        let mut d = Pathfinding::new(Search::Dijkstra, session);
+        d.player.seek(d.player.ops.len());
+        assert!(d.header().contains("cost"), "{}", d.header());
     }
 
     /// Review Focus 5: when the shared grid changes mid-replay, every viewport

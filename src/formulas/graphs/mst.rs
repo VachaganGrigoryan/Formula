@@ -23,6 +23,9 @@ pub struct Graph {
     points: Vec<[f32; 2]>,
     edges: Vec<Edge>,
     generation: u64,
+    /// Seed of the last generated point set, shared by every viewport so each
+    /// press of New points gives a new graph.
+    seed: u64,
 }
 
 impl Graph {
@@ -45,6 +48,7 @@ impl Graph {
             points,
             edges,
             generation: 0,
+            seed,
         }
     }
 
@@ -66,6 +70,12 @@ impl Graph {
         let generation = self.generation + 1;
         *self = Graph::random(n, seed);
         self.generation = generation;
+    }
+
+    /// Regenerates from the next seed in this graph's own sequence.
+    pub fn regenerate_next(&mut self, n: usize) {
+        // Steps of two: `Rng::new` ignores the low seed bit.
+        self.regenerate(n, self.seed.wrapping_add(2));
     }
 
     /// Moves point `i`, keeping it in the square and off every other point.
