@@ -74,8 +74,7 @@ impl Graph {
 
     /// Regenerates from the next seed in this graph's own sequence.
     pub fn regenerate_next(&mut self, n: usize) {
-        // Steps of two: `Rng::new` ignores the low seed bit.
-        self.regenerate(n, self.seed.wrapping_add(2));
+        self.regenerate(n, self.seed.wrapping_add(1));
     }
 
     /// Moves point `i`, keeping it in the square and off every other point.

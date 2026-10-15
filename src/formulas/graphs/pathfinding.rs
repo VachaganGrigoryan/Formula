@@ -435,16 +435,20 @@ mod tests {
         let session = Session::new();
         let _a = Pathfinding::new(Search::Bfs, session.clone());
         let _b = Pathfinding::new(Search::Dfs, session.clone());
+        let walls = || {
+            let g = session.grid.borrow();
+            (0..g.len()).map(|i| g.is_wall(i)).collect::<Vec<_>>()
+        };
         session.grid.borrow_mut().maze_next();
-        let first = session.grid.borrow().clone();
+        let first = walls();
         session.grid.borrow_mut().maze_next();
-        let second = session.grid.borrow().clone();
+        let second = walls();
         assert_ne!(first, second);
         session.grid.borrow_mut().scatter_next(0.28);
-        let third = session.grid.borrow().clone();
+        let third = walls();
         assert_ne!(second, third);
         session.grid.borrow_mut().scatter_next(0.28);
-        assert_ne!(third, *session.grid.borrow());
+        assert_ne!(third, walls());
     }
 
     #[test]
