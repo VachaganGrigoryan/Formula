@@ -63,18 +63,28 @@ impl Graph {
     /// Moves point `i`, keeping it in the square and off every other point.
     pub fn move_point(&mut self, i: usize, p: [f32; 2]) {
         let mut p = [p[0].clamp(0.02, 0.98), p[1].clamp(0.02, 0.98)];
-        let near = |pts: &[[f32; 2]], p: [f32; 2]| {
+        let clear = |pts: &[[f32; 2]], p: [f32; 2]| {
             pts.iter()
                 .enumerate()
-                .any(|(j, q)| j != i && (q[0] - p[0]).hypot(q[1] - p[1]) < 0.01)
+                .all(|(j, q)| j == i || (q[0] - p[0]).hypot(q[1] - p[1]) >= 0.01)
         };
-        for _ in 0..self.points.len() + 1 {
-            if !near(&self.points, p) {
-                break;
+        // Walk right along the row, wrapping at the edge; if the whole row is
+        // blocked, move on to the next row. Bounded: 41 rows of 81 steps.
+        let start = p;
+        'search: for row in 0..=40 {
+            p[1] = start[1] + 0.012 * row as f32;
+            if p[1] > 0.98 {
+                p[1] = 0.02 + (p[1] - 0.98);
             }
-            p[0] += 0.012;
-            if p[0] > 0.98 {
-                p[0] = 0.02;
+            p[0] = start[0];
+            for _ in 0..=80 {
+                if clear(&self.points, p) {
+                    break 'search;
+                }
+                p[0] += 0.012;
+                if p[0] > 0.98 {
+                    p[0] = 0.02;
+                }
             }
         }
         self.points[i] = p;
@@ -411,5 +421,36 @@ mod tests {
         assert_eq!(st.accepted, k.len());
         assert!((st.weight - weight(&g, &k)).abs() < 1e-3);
         assert!(st.in_tree.iter().all(|&t| t));
+    }
+
+    fn all_apart(g: &Graph) -> bool {
+        let p = g.points();
+        (0..p.len()).all(|i| (0..i).all(|j| (p[i][0] - p[j][0]).hypot(p[i][1] - p[j][1]) >= 0.01))
+    }
+
+    #[test]
+    fn dragging_onto_a_crowded_row_never_leaves_points_coincident() {
+        let mut g = Graph::random(14, 7);
+        let n = g.points().len();
+        // Pack every point but the last into one tight row, so a nudge has to
+        // walk past all of it.
+        for i in 0..n - 1 {
+            g.move_point(i, [0.5 + 0.015 * i as f32, 0.5]);
+            assert!(all_apart(&g), "placing {i}");
+        }
+        g.move_point(n - 1, [0.5, 0.5]);
+        assert!(all_apart(&g), "first drop");
+        for round in 0..8 {
+            for k in 0..n {
+                let target = if round % 2 == 0 {
+                    [0.5, 0.5]
+                } else {
+                    g.points()[(k + 3) % n]
+                };
+                g.move_point(k, target);
+                assert!(all_apart(&g), "round {round} point {k}");
+                assert!(g.edges().iter().all(|e| e.w.is_finite() && e.w > 0.0));
+            }
+        }
     }
 }
