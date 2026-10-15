@@ -2,6 +2,7 @@
 
 pub mod bst;
 pub mod grid;
+pub mod mst;
 pub mod path;
 pub mod pathfinding;
 pub mod tree;
@@ -14,12 +15,14 @@ use std::rc::Rc;
 #[derive(Clone)]
 pub struct Session {
     pub grid: Rc<RefCell<grid::Grid>>,
+    pub graph: Rc<RefCell<mst::Graph>>,
 }
 
 impl Session {
     pub fn new() -> Self {
         Self {
             grid: Rc::new(RefCell::new(grid::Grid::new(grid::GRID_W, grid::GRID_H))),
+            graph: Rc::new(RefCell::new(mst::Graph::random(14, 7))),
         }
     }
 }
