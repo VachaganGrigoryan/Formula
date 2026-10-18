@@ -2,6 +2,7 @@
 
 use egui::{Align2, FontId, Pos2, Rect, Sense, Shape, Stroke, pos2, vec2};
 
+use crate::derive::Substitution;
 use crate::draw::{self, lerp, lerp_color};
 use crate::formula::{Formula, MathText, Palette, Tone};
 
@@ -65,6 +66,18 @@ impl Lerp {
 }
 
 impl Formula for Lerp {
+    fn substitutions(&self) -> Vec<Substitution> {
+        vec![Substitution::new(
+            MathText::new().t("v(t)").tone(Tone::Trace),
+            "v_0 + t (v_1 - v_0)",
+            &[
+                ("t", self.t as f64),
+                ("v_0", self.v0 as f64),
+                ("v_1", self.v1 as f64),
+            ],
+        )]
+    }
+
     fn params(&self) -> Vec<(String, f64)> {
         vec![
             ("t".into(), self.t as f64),

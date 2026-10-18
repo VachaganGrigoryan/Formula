@@ -5,6 +5,7 @@ use std::f32::consts::PI;
 use egui::epaint::TextShape;
 use egui::{Align2, FontId, Pos2, Rect, Sense, Shape, Stroke, pos2, vec2};
 
+use crate::derive::Substitution;
 use crate::draw;
 use crate::formula::{Formula, MathText, Palette, Tone};
 
@@ -91,6 +92,26 @@ fn plane(rect: Rect) -> (Pos2, f32) {
 }
 
 impl Formula for Rotation {
+    fn substitutions(&self) -> Vec<Substitution> {
+        let values = [
+            ("θ", self.theta as f64),
+            ("x", self.point[0] as f64),
+            ("y", self.point[1] as f64),
+        ];
+        vec![
+            Substitution::new(
+                MathText::new().t("x'").tone(Tone::X),
+                "x cos(θ) - y sin(θ)",
+                &values,
+            ),
+            Substitution::new(
+                MathText::new().t("y'").tone(Tone::Y),
+                "x sin(θ) + y cos(θ)",
+                &values,
+            ),
+        ]
+    }
+
     fn params(&self) -> Vec<(String, f64)> {
         vec![
             ("θ".into(), self.theta as f64),

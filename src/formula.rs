@@ -11,7 +11,7 @@ use egui::text::LayoutJob;
 use egui::{Align, Color32, FontId, TextFormat};
 
 use crate::content::Lang;
-use crate::derive::Derivation;
+use crate::derive::{Derivation, Substitution};
 
 /// Colors shared by every formula, chosen for both light and dark themes.
 #[derive(Clone, Copy, Debug)]
@@ -132,6 +132,17 @@ impl MathText {
         self
     }
 
+    /// This equation followed by `other`, keeping both tints.
+    pub fn append(mut self, other: MathText) -> Self {
+        self.pieces.extend(other.pieces);
+        self
+    }
+
+    /// The runs of text, in order, with their tints.
+    pub fn tones(&self) -> impl Iterator<Item = (&Piece, Option<Tone>)> {
+        self.pieces.iter().map(|(p, t)| (p, *t))
+    }
+
     /// The runs of text, in order, without their tints.
     pub fn pieces(&self) -> impl Iterator<Item = &Piece> {
         self.pieces.iter().map(|(p, _)| p)
@@ -219,6 +230,12 @@ pub trait Formula {
 
     /// Step-by-step derivations of the equations, shown in the Derive tab.
     fn derivations(&self) -> Vec<Derivation> {
+        Vec::new()
+    }
+
+    /// The equations with their current values, which the Derive tab works
+    /// out one operation at a time ("Plug in current values").
+    fn substitutions(&self) -> Vec<Substitution> {
         Vec::new()
     }
 

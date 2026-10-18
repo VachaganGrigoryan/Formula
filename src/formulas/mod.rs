@@ -405,6 +405,22 @@ mod tests {
         }
     }
 
+    /// Plugging a tool's default values into its equations ends in a number.
+    #[test]
+    fn plugging_in_the_default_values_ends_in_a_number() {
+        let env = ToolEnv::new();
+        for tool in TOOLS {
+            for s in (tool.make)(&env).substitutions() {
+                let value = |n: &str| s.values.iter().find(|p| p.0 == n).map(|p| p.1);
+                let steps = crate::derive::substitution_steps(&s.expr, &value);
+                match steps.last().map(|r| &r.expr) {
+                    Some(crate::expr::Expr::Num(v)) => assert!(v.is_finite(), "{}", tool.id),
+                    other => panic!("{}: ends in {other:?}", tool.id),
+                }
+            }
+        }
+    }
+
     /// Every character a formula shows in its text must exist in egui's bundled
     /// fonts, or it renders as an empty box.
     #[test]
@@ -418,13 +434,16 @@ mod tests {
             for eq in f.equations() {
                 text.push_str(&eq.text());
             }
-            for d in f.derivations() {
+            for d in crate::derive::all_derivations(&*f) {
                 text.push_str(&d.title);
                 for step in &d.steps {
                     text.push_str(&step.math.text());
                     text.push_str(&step.why);
                 }
             }
+            // Worked steps can end in these, whatever the defaults are.
+            text.push_str(&crate::expr::number(f64::INFINITY));
+            text.push_str(&crate::expr::number(f64::NAN));
             // The reference docs are drawn in the same font.
             text.push_str(crate::content::doc(f.id()).unwrap_or(""));
             let missing: String = ctx.fonts_mut(|fonts| {

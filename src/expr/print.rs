@@ -1,7 +1,7 @@
 //! Canonical, re-parseable text for an expression.
 
 use super::ast::{BinOp, Definition, Expr};
-use crate::formula::MathText;
+use crate::formula::{MathText, Tone};
 use std::fmt::Write;
 
 /// Prints `e` with spaces around binary operators and the parentheses needed
@@ -82,10 +82,180 @@ enum Run {
     Sup(String),
 }
 
+/// Typesets expressions into runs, optionally rounding numbers and
+/// highlighting the subtree at one path (child indices from the root).
+struct Typeset<'a> {
+    runs: Vec<(Run, bool)>,
+    round: bool,
+    focus: Option<&'a [usize]>,
+}
+
+impl Typeset<'_> {
+    fn push(&mut self, run: Run, hot: bool) {
+        self.runs.push((run, hot));
+    }
+
+    fn text(&mut self, s: &str, hot: bool) {
+        self.push(Run::T(s.into()), hot);
+    }
+
+    fn finish(self) -> MathText {
+        self.runs.into_iter().fold(MathText::new(), |m, (r, hot)| {
+            let m = match r {
+                Run::T(s) => m.t(&s),
+                Run::Sub(s) => m.sub(&s),
+                Run::Sup(s) => m.sup(&s),
+            };
+            if hot { m.tone(Tone::Trace) } else { m }
+        })
+    }
+
+    fn number(&self, v: f64) -> String {
+        if self.round {
+            number(v)
+        } else {
+            format!("{v}")
+        }
+    }
+
+    /// `e` at `path`. `hot` is set inside the focused subtree; `wrap_negative`
+    /// puts a negative literal in parentheses (`3 - (-2)`, `(-2)²`).
+    fn expr(&mut self, e: &Expr, path: &mut Vec<usize>, hot: bool, wrap_negative: bool) {
+        let hot = hot || self.focus == Some(path.as_slice());
+        match e {
+            Expr::Num(v) => {
+                let s = self.number(*v);
+                if wrap_negative && *v < 0.0 {
+                    self.text(&format!("({s})"), hot);
+                } else {
+                    self.text(&s, hot);
+                }
+            }
+            Expr::Var(n) => match n.split_once('_') {
+                Some((base, sub)) => {
+                    self.push(Run::T(base.into()), hot);
+                    self.push(Run::Sub(sub.into()), hot);
+                }
+                None => self.text(n, hot),
+            },
+            Expr::Neg(a) => {
+                self.text("-", hot);
+                self.child(a, 0, prec(a) < 4, true, path, hot);
+            }
+            Expr::Bin(BinOp::Pow, base, exp) => {
+                self.child(base, 0, prec(base) < 5, true, path, hot);
+                // An exponent is one superscript run, so nested powers stay as `^`.
+                let mut inner = Typeset {
+                    runs: Vec::new(),
+                    round: self.round,
+                    focus: None,
+                };
+                path.push(1);
+                let exp_hot = hot || self.focus.is_some_and(|f| f.starts_with(path));
+                inner.expr(exp, path, false, false);
+                path.pop();
+                let text: String = inner
+                    .runs
+                    .into_iter()
+                    .map(|(r, _)| match r {
+                        Run::T(s) | Run::Sub(s) | Run::Sup(s) => s,
+                    })
+                    .collect();
+                self.push(Run::Sup(text.replace(' ', "")), exp_hot);
+            }
+            Expr::Bin(op, l, r) => {
+                let p = prec(e);
+                self.child(l, 0, prec(l) < p, false, path, hot);
+                let sep = match op {
+                    BinOp::Add => " + ",
+                    BinOp::Sub => " - ",
+                    BinOp::Div => " / ",
+                    // `2x`, `a b`, but `x · 2` so two numbers never run together.
+                    BinOp::Mul => match (&**l, &**r) {
+                        (_, Expr::Num(_)) => " · ",
+                        (Expr::Num(_), Expr::Var(_)) => "",
+                        _ => " ",
+                    },
+                    BinOp::Pow => unreachable!(),
+                };
+                self.text(sep, hot);
+                self.child(r, 1, prec(r) <= p, true, path, hot);
+            }
+            Expr::Call(f, args) => {
+                self.text(&format!("{}(", f.name()), hot);
+                for (i, a) in args.iter().enumerate() {
+                    if i > 0 {
+                        self.text(", ", hot);
+                    }
+                    path.push(i);
+                    self.expr(a, path, hot, false);
+                    path.pop();
+                }
+                self.text(")", hot);
+            }
+        }
+    }
+
+    fn child(
+        &mut self,
+        e: &Expr,
+        index: usize,
+        parens: bool,
+        wrap_negative: bool,
+        path: &mut Vec<usize>,
+        hot: bool,
+    ) {
+        path.push(index);
+        let hot_here = hot || self.focus == Some(path.as_slice());
+        if parens {
+            self.text("(", hot_here);
+        }
+        self.expr(e, path, hot, wrap_negative && !parens);
+        if parens {
+            self.text(")", hot_here);
+        }
+        path.pop();
+    }
+}
+
+/// A number for a worked step: at most four significant digits, scientific
+/// notation when very large or small, and words for what is not a number.
+pub fn number(v: f64) -> String {
+    if v.is_nan() {
+        return "undefined".into();
+    }
+    if v.is_infinite() {
+        return if v > 0.0 { "∞".into() } else { "-∞".into() };
+    }
+    if v == 0.0 {
+        return "0".into();
+    }
+    let trim = |s: String| {
+        if s.contains('.') {
+            s.trim_end_matches('0').trim_end_matches('.').to_string()
+        } else {
+            s
+        }
+    };
+    if !(1e-4..1e6).contains(&v.abs()) {
+        let s = format!("{v:.3e}");
+        let (mantissa, exponent) = s.split_once('e').unwrap_or((&s, "0"));
+        return format!("{}e{exponent}", trim(mantissa.to_string()));
+    }
+    let digits = v.abs().log10().floor() as i32 + 1;
+    let decimals = (4 - digits).max(0) as usize;
+    trim(format!("{v:.decimals$}"))
+}
+
 /// The definition typeset for the Inspector and LaTeX export: implicit
 /// products as spaces, powers as superscripts, subscripted names (`k_r`).
 pub fn to_math(def: &Definition) -> MathText {
-    let mut runs = Vec::new();
+    let mut t = Typeset {
+        runs: Vec::new(),
+        round: false,
+        focus: None,
+    };
+    let mut path = Vec::new();
     match def {
         Definition::Explicit { var, body } => {
             let head = if var == "x" {
@@ -93,86 +263,34 @@ pub fn to_math(def: &Definition) -> MathText {
             } else {
                 format!("f({var}) = ")
             };
-            runs.push(Run::T(head));
-            math(body, &mut runs);
+            t.text(&head, false);
+            t.expr(body, &mut path, false, false);
         }
         Definition::Polar { r, .. } => {
-            runs.push(Run::T("r = ".into()));
-            math(r, &mut runs);
+            t.text("r = ", false);
+            t.expr(r, &mut path, false, false);
         }
         Definition::Parametric { x, y, .. } => {
-            runs.push(Run::T("(".into()));
-            math(x, &mut runs);
-            runs.push(Run::T(", ".into()));
-            math(y, &mut runs);
-            runs.push(Run::T(")".into()));
+            t.text("(", false);
+            t.expr(x, &mut path, false, false);
+            t.text(", ", false);
+            t.expr(y, &mut path, false, false);
+            t.text(")", false);
         }
     }
-    runs.into_iter().fold(MathText::new(), |m, r| match r {
-        Run::T(s) => m.t(&s),
-        Run::Sub(s) => m.sub(&s),
-        Run::Sup(s) => m.sup(&s),
-    })
+    t.finish()
 }
 
-fn math_child(e: &Expr, parens: bool, runs: &mut Vec<Run>) {
-    if parens {
-        runs.push(Run::T("(".into()));
-    }
-    math(e, runs);
-    if parens {
-        runs.push(Run::T(")".into()));
-    }
-}
-
-fn math(e: &Expr, runs: &mut Vec<Run>) {
-    match e {
-        Expr::Num(v) => runs.push(Run::T(format!("{v}"))),
-        Expr::Var(n) => match n.split_once('_') {
-            Some((base, sub)) => {
-                runs.push(Run::T(base.into()));
-                runs.push(Run::Sub(sub.into()));
-            }
-            None => runs.push(Run::T(n.clone())),
-        },
-        Expr::Neg(a) => {
-            runs.push(Run::T("-".into()));
-            math_child(a, prec(a) < 4, runs);
-        }
-        Expr::Bin(BinOp::Pow, base, exp) => {
-            math_child(base, prec(base) < 5, runs);
-            // An exponent is one superscript run, so nested powers stay as `^`.
-            runs.push(Run::Sup(print(exp)));
-        }
-        Expr::Bin(op, l, r) => {
-            let p = prec(e);
-            math_child(l, prec(l) < p, runs);
-            let sep = match op {
-                BinOp::Add => " + ",
-                BinOp::Sub => " - ",
-                BinOp::Div => " / ",
-                // `2x`, `a b`, but `x · 2` so two numbers never run together.
-                BinOp::Mul => match (&**l, &**r) {
-                    (_, Expr::Num(_)) => " · ",
-                    (Expr::Num(_), Expr::Var(_)) => "",
-                    _ => " ",
-                },
-                BinOp::Pow => unreachable!(),
-            };
-            runs.push(Run::T(sep.into()));
-            math_child(r, prec(r) <= p, runs);
-        }
-        Expr::Call(f, args) => {
-            runs.push(Run::T(format!("{}(", f.name())));
-            for (i, a) in args.iter().enumerate() {
-                if i > 0 {
-                    runs.push(Run::T(", ".into()));
-                }
-                math(a, runs);
-            }
-            runs.push(Run::T(")".into()));
-        }
-    }
+/// One expression typeset for a worked step: numbers rounded by [`number`]
+/// and the subtree at `focus` (child indices from the root) in the trace tone.
+pub fn expr_math(e: &Expr, focus: Option<&[usize]>) -> MathText {
+    let mut t = Typeset {
+        runs: Vec::new(),
+        round: true,
+        focus,
+    };
+    t.expr(e, &mut Vec::new(), false, false);
+    t.finish()
 }
 
 #[cfg(test)]

@@ -13,7 +13,7 @@ use super::markdown::{self, Block};
 use super::theme::{Chrome, mono};
 use super::{export, notebook};
 use crate::content::{self, Lang};
-use crate::derive::{Derivation, clamp_steps};
+use crate::derive::{Derivation, all_derivations, clamp_steps};
 use crate::formula::{Formula, Palette};
 use crate::formulas::{Tool, ToolEnv};
 use crate::latex;
@@ -502,7 +502,7 @@ impl Inspector {
     ) {
         let list: Vec<Derivation> = self
             .context_formula(ws)
-            .map(|f| f.derivations())
+            .map(all_derivations)
             .unwrap_or_default();
         if list.is_empty() {
             hint(ui, chrome, "No derivation for this tool yet.");

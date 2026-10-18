@@ -3,6 +3,7 @@
 
 use egui::{Align2, Color32, FontId, Pos2, Rect, Sense, Stroke, pos2, vec2};
 
+use crate::derive::Substitution;
 use crate::draw::lerp_color;
 use crate::formula::{Formula, MathText, Palette, Tone};
 use crate::rng::Rng;
@@ -183,6 +184,23 @@ fn cluster_colors(p: &Palette) -> [Color32; 6] {
 }
 
 impl Formula for Distance {
+    fn substitutions(&self) -> Vec<Substitution> {
+        let Some((i, _)) = nearest(&self.points, self.probe) else {
+            return Vec::new();
+        };
+        let ([x1, y1], [x2, y2]) = (self.probe, self.points[i]);
+        vec![Substitution::new(
+            MathText::new().t("d").tone(Tone::Trace),
+            "sqrt((x_2 - x_1)^2 + (y_2 - y_1)^2)",
+            &[
+                ("x_1", x1 as f64),
+                ("y_1", y1 as f64),
+                ("x_2", x2 as f64),
+                ("y_2", y2 as f64),
+            ],
+        )]
+    }
+
     fn id(&self) -> &'static str {
         "euclidean-distance"
     }

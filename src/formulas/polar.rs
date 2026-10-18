@@ -4,6 +4,7 @@ use std::f32::consts::{PI, TAU};
 
 use egui::{Align2, FontId, Pos2, Rect, Sense, Shape, Stroke, pos2, vec2};
 
+use crate::derive::Substitution;
 use crate::formula::{Formula, MathText, Palette, Tone};
 
 /// `(r, θ)` → `(x, y)`, with y pointing up.
@@ -62,6 +63,17 @@ fn geometry(rect: Rect) -> (Pos2, f32) {
 }
 
 impl Formula for Polar {
+    fn substitutions(&self) -> Vec<Substitution> {
+        let values = [
+            ("r", self.radius(self.theta) as f64),
+            ("θ", self.theta as f64),
+        ];
+        vec![
+            Substitution::new(MathText::new().t("x").tone(Tone::X), "r cos(θ)", &values),
+            Substitution::new(MathText::new().t("y").tone(Tone::Y), "r sin(θ)", &values),
+        ]
+    }
+
     fn params(&self) -> Vec<(String, f64)> {
         vec![("r".into(), self.r as f64), ("θ".into(), self.theta as f64)]
     }

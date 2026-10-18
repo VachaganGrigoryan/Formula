@@ -2,6 +2,7 @@
 
 use egui::{Align2, FontId, Pos2, Rect, Shape, Stroke, pos2, vec2};
 
+use crate::derive::Substitution;
 use crate::draw::lerp;
 use crate::formula::{Formula, MathText, Palette, Tone};
 use crate::rng::Rng;
@@ -96,6 +97,14 @@ fn layout(rect: Rect) -> Layout {
 }
 
 impl Formula for Easing {
+    fn substitutions(&self) -> Vec<Substitution> {
+        vec![Substitution::new(
+            MathText::new().t("f(t)").tone(Tone::Trace),
+            "1 - (1 - t)^3",
+            &[("t", self.progress() as f64)],
+        )]
+    }
+
     fn params(&self) -> Vec<(String, f64)> {
         vec![("t".into(), self.progress() as f64)]
     }
