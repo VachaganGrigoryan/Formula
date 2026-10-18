@@ -466,8 +466,8 @@ impl Formula for Expression {
         }
         ui.add_space(6.0);
         egui::Grid::new("expression-params")
-            .num_columns(4)
-            .spacing([8.0, 8.0])
+            .num_columns(2)
+            .spacing([10.0, 4.0])
             .show(ui, |ui| {
                 for (name, p) in self.params.iter_mut() {
                     ui.label(RichText::new(name).italics());
@@ -475,8 +475,15 @@ impl Formula for Expression {
                         egui::Slider::new(&mut p.value, p.min..=p.max)
                             .clamping(egui::SliderClamping::Edits),
                     );
-                    ui.add(egui::DragValue::new(&mut p.min).speed(0.1).prefix("min "));
-                    ui.add(egui::DragValue::new(&mut p.max).speed(0.1).prefix("max "));
+                    ui.end_row();
+                    // The slider's range on its own line, so a narrow panel shows it.
+                    ui.label("");
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new("range").small().color(palette.muted));
+                        ui.add(egui::DragValue::new(&mut p.min).speed(0.1));
+                        ui.label(RichText::new("to").small().color(palette.muted));
+                        ui.add(egui::DragValue::new(&mut p.max).speed(0.1));
+                    });
                     if p.min > p.max {
                         std::mem::swap(&mut p.min, &mut p.max);
                     }

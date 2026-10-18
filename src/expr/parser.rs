@@ -11,7 +11,7 @@ use std::ops::Range;
 /// Maximum nesting (parentheses, negations, powers, long operator chains).
 const MAX_DEPTH: usize = 256;
 
-const HEAD_HELP: &str = "Write y = \u{2026}, r = \u{2026}, f(x) = \u{2026} or (x(t), y(t))";
+const HEAD_HELP: &str = "Write y = ..., r = ..., f(x) = ... or (x(t), y(t))";
 
 type Res<T> = Result<T, ParseError>;
 
