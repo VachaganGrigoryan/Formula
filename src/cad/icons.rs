@@ -188,6 +188,15 @@ pub fn tool(painter: &Painter, rect: Rect, id: &str, color: Color32) {
                 (0.1 + 0.8 * t, 0.55 - 0.28 * (t * TAU * 1.25).sin())
             });
         }
+        "quadratic-formula" => {
+            p.line(&[(0.08, 0.62), (0.92, 0.62)]);
+            p.curve(32, |t| {
+                let x = -1.0 + 2.0 * t;
+                (0.5 + 0.38 * x, 0.88 - 0.72 * (1.0 - x * x))
+            });
+            p.dot(0.2, 0.62, 0.05);
+            p.dot(0.8, 0.62, 0.05);
+        }
         "force-layout" => {
             let nodes = [
                 (0.2, 0.3),

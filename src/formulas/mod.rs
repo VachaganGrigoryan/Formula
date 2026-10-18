@@ -22,6 +22,7 @@ pub mod matrix;
 pub mod normalize;
 pub mod polar;
 pub mod projection;
+pub mod proofs;
 pub mod regression;
 pub mod replay;
 pub mod rotation;
@@ -44,6 +45,7 @@ pub const COLOR: &str = "Color & Accessibility";
 pub const LINEAR_ALGEBRA: &str = "Linear Algebra";
 pub const SORTING: &str = "Sorting";
 pub const GRAPHS: &str = "Graphs & Trees";
+pub const PROOFS: &str = "Proofs & Derivations";
 
 /// Shown on first launch, before a choice has been remembered.
 pub const DEFAULT_ID: &str = "fourier-epicycles";
@@ -311,6 +313,13 @@ pub static TOOLS: &[Tool] = &[
     ),
     tool!("kruskal", "Kruskal's algorithm", GRAPHS, "KRU", mst::<0>),
     tool!("prim", "Prim's algorithm", GRAPHS, "PRI", mst::<1>),
+    tool!(
+        "quadratic-formula",
+        "Quadratic formula",
+        PROOFS,
+        "QDR",
+        new::<proofs::quadratic::Quadratic>
+    ),
 ];
 
 /// The tool with this id.

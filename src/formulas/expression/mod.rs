@@ -174,6 +174,85 @@ impl Expression {
     }
 }
 
+/// Drag to pan, and wheel or pinch to zoom at the pointer, but only while
+/// this is the active viewport (an inactive one is handed a hover-only
+/// response). Returns the pointer position when it is over the stage.
+pub fn pan_zoom(view: &mut View, response: &egui::Response, rect: Rect) -> Option<Pos2> {
+    let hover = response.hover_pos().filter(|p| rect.contains(*p));
+    if response.dragged() {
+        let d = response.drag_delta();
+        view.cx -= d.x as f64 * view.scale;
+        view.cy += d.y as f64 * view.scale;
+    }
+    if let Some(at) = hover
+        && response.sense.senses_click()
+    {
+        let (pinch, wheel) = response
+            .ctx
+            .input(|i| (i.zoom_delta(), i.smooth_scroll_delta.y));
+        let zoom = pinch as f64 * (wheel as f64 * 0.003).exp();
+        if zoom != 1.0 {
+            view.zoom_at(rect, at, zoom);
+        }
+    }
+    hover
+}
+
+/// Grid lines on round values, the axes, and tick labels along them.
+pub fn paint_axes(painter: &egui::Painter, rect: Rect, view: &View, palette: &Palette) {
+    let (xr, yr) = (view.x_range(rect), view.y_range(rect));
+    let to_screen = |p: [f64; 2]| view.to_screen(rect, p);
+    let step = nice_step(xr.1 - xr.0, (rect.width() / 70.0).max(2.0) as usize);
+    let grid = Stroke::new(1.0, palette.rule);
+    let first = |lo: f64| (lo / step).ceil() as i64;
+    let xs: Vec<f64> = (first(xr.0)..=(xr.1 / step).floor() as i64)
+        .map(|k| k as f64 * step)
+        .collect();
+    let ys: Vec<f64> = (first(yr.0)..=(yr.1 / step).floor() as i64)
+        .map(|k| k as f64 * step)
+        .collect();
+    for &x in &xs {
+        let sx = to_screen([x, 0.0]).x;
+        painter.line_segment([pos2(sx, rect.top()), pos2(sx, rect.bottom())], grid);
+    }
+    for &y in &ys {
+        let sy = to_screen([0.0, y]).y;
+        painter.line_segment([pos2(rect.left(), sy), pos2(rect.right(), sy)], grid);
+    }
+    let origin = to_screen([0.0, 0.0]);
+    let axis = Stroke::new(1.2, palette.muted);
+    painter.line_segment(
+        [pos2(rect.left(), origin.y), pos2(rect.right(), origin.y)],
+        axis,
+    );
+    painter.line_segment(
+        [pos2(origin.x, rect.top()), pos2(origin.x, rect.bottom())],
+        axis,
+    );
+    let font = FontId::monospace(11.0);
+    // Labels stay inside the stage when an axis is off screen.
+    let label_y = origin.y.clamp(rect.top() + 2.0, rect.bottom() - 16.0);
+    let label_x = origin.x.clamp(rect.left() + 4.0, rect.right() - 40.0);
+    for &x in xs.iter().filter(|x| x.abs() > step * 1e-6) {
+        painter.text(
+            pos2(to_screen([x, 0.0]).x + 3.0, label_y + 2.0),
+            Align2::LEFT_TOP,
+            tick_label(x, step),
+            font.clone(),
+            palette.muted,
+        );
+    }
+    for &y in ys.iter().filter(|y| y.abs() > step * 1e-6) {
+        painter.text(
+            pos2(label_x + 4.0, to_screen([0.0, y]).y - 2.0),
+            Align2::LEFT_BOTTOM,
+            tick_label(y, step),
+            font.clone(),
+            palette.muted,
+        );
+    }
+}
+
 /// Row colors cycle through three accents; rows 4 to 6 are dashed.
 fn row_style(i: usize, palette: &Palette) -> (Color32, bool) {
     let color = [palette.trace, palette.x, palette.y][i % 3];
@@ -241,25 +320,7 @@ impl Formula for Expression {
     }
 
     fn interact(&mut self, response: &egui::Response, rect: Rect) {
-        self.hover = response.hover_pos().filter(|p| rect.contains(*p));
-        if response.dragged() {
-            let d = response.drag_delta();
-            self.view.cx -= d.x as f64 * self.view.scale;
-            self.view.cy += d.y as f64 * self.view.scale;
-        }
-        // Wheel and pinch zoom, only while this is the active viewport (an
-        // inactive one is handed a hover-only response).
-        if let Some(at) = self.hover
-            && response.sense.senses_click()
-        {
-            let (pinch, wheel) = response
-                .ctx
-                .input(|i| (i.zoom_delta(), i.smooth_scroll_delta.y));
-            let zoom = pinch as f64 * (wheel as f64 * 0.003).exp();
-            if zoom != 1.0 {
-                self.view.zoom_at(rect, at, zoom);
-            }
-        }
+        self.hover = pan_zoom(&mut self.view, response, rect);
     }
 
     fn wants_scroll(&self) -> bool {
@@ -273,59 +334,10 @@ impl Formula for Expression {
     fn paint(&mut self, painter: &egui::Painter, rect: Rect, palette: &Palette, _dt: f32) {
         let painter = painter.with_clip_rect(rect);
         let view = self.view;
-        let (xr, yr) = (view.x_range(rect), view.y_range(rect));
+        let yr = view.y_range(rect);
         let to_screen = |p: [f64; 2]| view.to_screen(rect, p);
 
-        // Grid lines on round values, then the axes, then tick labels along them.
-        let step = nice_step(xr.1 - xr.0, (rect.width() / 70.0).max(2.0) as usize);
-        let grid = Stroke::new(1.0, palette.rule);
-        let first = |lo: f64| (lo / step).ceil() as i64;
-        let xs: Vec<f64> = (first(xr.0)..=(xr.1 / step).floor() as i64)
-            .map(|k| k as f64 * step)
-            .collect();
-        let ys: Vec<f64> = (first(yr.0)..=(yr.1 / step).floor() as i64)
-            .map(|k| k as f64 * step)
-            .collect();
-        for &x in &xs {
-            let sx = to_screen([x, 0.0]).x;
-            painter.line_segment([pos2(sx, rect.top()), pos2(sx, rect.bottom())], grid);
-        }
-        for &y in &ys {
-            let sy = to_screen([0.0, y]).y;
-            painter.line_segment([pos2(rect.left(), sy), pos2(rect.right(), sy)], grid);
-        }
-        let origin = to_screen([0.0, 0.0]);
-        let axis = Stroke::new(1.2, palette.muted);
-        painter.line_segment(
-            [pos2(rect.left(), origin.y), pos2(rect.right(), origin.y)],
-            axis,
-        );
-        painter.line_segment(
-            [pos2(origin.x, rect.top()), pos2(origin.x, rect.bottom())],
-            axis,
-        );
-        let font = FontId::monospace(11.0);
-        // Labels stay inside the stage when an axis is off screen.
-        let label_y = origin.y.clamp(rect.top() + 2.0, rect.bottom() - 16.0);
-        let label_x = origin.x.clamp(rect.left() + 4.0, rect.right() - 40.0);
-        for &x in xs.iter().filter(|x| x.abs() > step * 1e-6) {
-            painter.text(
-                pos2(to_screen([x, 0.0]).x + 3.0, label_y + 2.0),
-                Align2::LEFT_TOP,
-                tick_label(x, step),
-                font.clone(),
-                palette.muted,
-            );
-        }
-        for &y in ys.iter().filter(|y| y.abs() > step * 1e-6) {
-            painter.text(
-                pos2(label_x + 4.0, to_screen([0.0, y]).y - 2.0),
-                Align2::LEFT_BOTTOM,
-                tick_label(y, step),
-                font.clone(),
-                palette.muted,
-            );
-        }
+        paint_axes(&painter, rect, &view, palette);
 
         for (i, row) in self.rows.iter().enumerate() {
             let Ok(def) = &row.def else { continue };
