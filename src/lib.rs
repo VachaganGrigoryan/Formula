@@ -7,6 +7,7 @@ pub mod app;
 pub mod audio;
 pub mod cad;
 pub mod content;
+pub mod derive;
 pub mod draw;
 pub mod expr;
 pub mod formula;

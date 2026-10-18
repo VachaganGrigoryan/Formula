@@ -2,6 +2,7 @@
 
 use egui::{Align2, Color32, FontId, Pos2, Rect, Sense, Stroke, pos2, vec2};
 
+use crate::derive::Substitution;
 use crate::formula::{Formula, MathText, Palette, Tone, fit_text};
 
 /// Channel weights: the eye is most sensitive to green, least to blue.
@@ -123,6 +124,16 @@ fn cell_at(grid: Rect, p: Pos2) -> Option<(usize, usize)> {
 }
 
 impl Formula for Luminance {
+    fn substitutions(&self) -> Vec<Substitution> {
+        let params = self.params();
+        let values: Vec<(&str, f64)> = params.iter().map(|(n, v)| (n.as_str(), *v)).collect();
+        vec![Substitution::new(
+            MathText::new().t("Y").tone(Tone::Trace),
+            "0.2126 R + 0.7152 G + 0.0722 B",
+            &values,
+        )]
+    }
+
     fn params(&self) -> Vec<(String, f64)> {
         let [r, g, b] = self.selected.map(|c| {
             let c = c as f32 / 255.0;

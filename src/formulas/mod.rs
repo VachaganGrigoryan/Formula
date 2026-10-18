@@ -22,6 +22,7 @@ pub mod matrix;
 pub mod normalize;
 pub mod polar;
 pub mod projection;
+pub mod proofs;
 pub mod regression;
 pub mod replay;
 pub mod rotation;
@@ -44,6 +45,7 @@ pub const COLOR: &str = "Color & Accessibility";
 pub const LINEAR_ALGEBRA: &str = "Linear Algebra";
 pub const SORTING: &str = "Sorting";
 pub const GRAPHS: &str = "Graphs & Trees";
+pub const PROOFS: &str = "Proofs & Derivations";
 
 /// Shown on first launch, before a choice has been remembered.
 pub const DEFAULT_ID: &str = "fourier-epicycles";
@@ -311,6 +313,27 @@ pub static TOOLS: &[Tool] = &[
     ),
     tool!("kruskal", "Kruskal's algorithm", GRAPHS, "KRU", mst::<0>),
     tool!("prim", "Prim's algorithm", GRAPHS, "PRI", mst::<1>),
+    tool!(
+        "quadratic-formula",
+        "Quadratic formula",
+        PROOFS,
+        "QDR",
+        new::<proofs::quadratic::Quadratic>
+    ),
+    tool!(
+        "pythagorean-proof",
+        "Pythagorean theorem",
+        PROOFS,
+        "PYT",
+        new::<proofs::pythagoras::Pythagoras>
+    ),
+    tool!(
+        "euler-identity",
+        "Euler's formula",
+        PROOFS,
+        "EUL",
+        new::<proofs::euler::Euler>
+    ),
 ];
 
 /// The tool with this id.
@@ -405,6 +428,22 @@ mod tests {
         }
     }
 
+    /// Plugging a tool's default values into its equations ends in a number.
+    #[test]
+    fn plugging_in_the_default_values_ends_in_a_number() {
+        let env = ToolEnv::new();
+        for tool in TOOLS {
+            for s in (tool.make)(&env).substitutions() {
+                let value = |n: &str| s.values.iter().find(|p| p.0 == n).map(|p| p.1);
+                let steps = crate::derive::substitution_steps(&s.expr, &value);
+                match steps.last().map(|r| &r.expr) {
+                    Some(crate::expr::Expr::Num(v)) => assert!(v.is_finite(), "{}", tool.id),
+                    other => panic!("{}: ends in {other:?}", tool.id),
+                }
+            }
+        }
+    }
+
     /// Every character a formula shows in its text must exist in egui's bundled
     /// fonts, or it renders as an empty box.
     #[test]
@@ -418,6 +457,16 @@ mod tests {
             for eq in f.equations() {
                 text.push_str(&eq.text());
             }
+            for d in crate::derive::all_derivations(&*f) {
+                text.push_str(&d.title);
+                for step in &d.steps {
+                    text.push_str(&step.math.text());
+                    text.push_str(&step.why);
+                }
+            }
+            // Worked steps can end in these, whatever the defaults are.
+            text.push_str(&crate::expr::number(f64::INFINITY));
+            text.push_str(&crate::expr::number(f64::NAN));
             // The reference docs are drawn in the same font.
             text.push_str(crate::content::doc(f.id()).unwrap_or(""));
             let missing: String = ctx.fonts_mut(|fonts| {

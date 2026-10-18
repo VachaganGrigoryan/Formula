@@ -87,6 +87,15 @@ the static file. A test keeps the static files equal to the default instance's e
 `plot <expr>` command places a plotter through `Formula::load_state`. `save_state` / `load_state`
 are no-ops for every other tool until sheet files arrive.
 
+**Derivations.** The Inspector's Derive tab shows `derive::all_derivations(f)`. The first entry is
+"Plug in current values", built from `Formula::substitutions` (each a left-hand side, a source
+string parsed with `expr`, and the variable values). `derive::substitution_steps` substitutes the
+values, then computes the innermost-leftmost operation on numbers, one per step, until one number
+is left; negated numbers fold into the step that made them. After it come the authored
+`Formula::derivations` (`Step` = a `MathText` and why it follows). Every step's text is covered by
+the glyph test and the ASCII-LaTeX test. The proof tools live in `formulas/proofs/` under the
+`PROOFS` category.
+
 **Embedded content.** `build.rs` scans `assets/content/<tool-id>/` and generates
 `$OUT_DIR/content.rs` with an `include_str!` for each `doc.md`, `main.py`, `main.ts`, `main.rs`.
 `src/content.rs` serves it. Adding content needs no code change.

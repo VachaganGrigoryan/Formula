@@ -21,6 +21,7 @@ pub enum Ui {
     Delete,
     Duplicate,
     Docs,
+    Derive,
     Code,
     Copy,
     Download,
@@ -186,6 +187,32 @@ pub fn tool(painter: &Painter, rect: Rect, id: &str, color: Color32) {
             p.curve(32, |t| {
                 (0.1 + 0.8 * t, 0.55 - 0.28 * (t * TAU * 1.25).sin())
             });
+        }
+        "quadratic-formula" => {
+            p.line(&[(0.08, 0.62), (0.92, 0.62)]);
+            p.curve(32, |t| {
+                let x = -1.0 + 2.0 * t;
+                (0.5 + 0.38 * x, 0.88 - 0.72 * (1.0 - x * x))
+            });
+            p.dot(0.2, 0.62, 0.05);
+            p.dot(0.8, 0.62, 0.05);
+        }
+        "pythagorean-proof" => {
+            // The tilted square inside the big one.
+            p.closed(&[(0.1, 0.1), (0.9, 0.1), (0.9, 0.9), (0.1, 0.9)]);
+            p.closed(&[(0.42, 0.1), (0.9, 0.42), (0.58, 0.9), (0.1, 0.58)]);
+        }
+        "euler-identity" => {
+            p.circle(0.5, 0.5, 0.36);
+            // A few partial sums spiralling in to the point on the circle.
+            p.line(&[
+                (0.5, 0.5),
+                (0.86, 0.5),
+                (0.86, 0.14),
+                (0.4, 0.14),
+                (0.3, 0.3),
+            ]);
+            p.dot(0.3, 0.3, 0.05);
         }
         "force-layout" => {
             let nodes = [
@@ -562,6 +589,14 @@ pub fn ui(painter: &Painter, rect: Rect, icon: Ui, color: Color32) {
             for y in [0.38, 0.55, 0.72] {
                 p.line(&[(0.32, y), (0.7, y)]);
             }
+        }
+        Ui::Derive => {
+            // An equals sign and three lines of working, each shorter than the last.
+            p.line(&[(0.1, 0.4), (0.3, 0.4)]);
+            p.line(&[(0.1, 0.6), (0.3, 0.6)]);
+            p.line(&[(0.42, 0.22), (0.9, 0.22)]);
+            p.line(&[(0.42, 0.5), (0.8, 0.5)]);
+            p.line(&[(0.42, 0.78), (0.68, 0.78)]);
         }
         Ui::Code => {
             p.line(&[(0.32, 0.25), (0.1, 0.5), (0.32, 0.75)]);

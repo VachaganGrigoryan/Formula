@@ -2,6 +2,7 @@
 
 use egui::{Align2, FontId, Rect, Shape, Stroke, pos2, vec2};
 
+use crate::derive::Substitution;
 use crate::draw::lerp;
 use crate::formula::{Formula, MathText, Palette, Tone};
 use crate::rng::Rng;
@@ -93,6 +94,23 @@ fn bar_rect(chart: Rect, i: usize, n: usize) -> Rect {
 }
 
 impl Formula for Normalize {
+    fn substitutions(&self) -> Vec<Substitution> {
+        let values = self.values();
+        let Some(&x) = self.hovered.and_then(|i| values.get(i)).or(values.first()) else {
+            return Vec::new();
+        };
+        let (lo, hi) = bounds(&values);
+        vec![Substitution::new(
+            MathText::new()
+                .t("X")
+                .tone(Tone::Trace)
+                .sub("norm")
+                .tone(Tone::Trace),
+            "(X - X_min) / (X_max - X_min)",
+            &[("X", x as f64), ("X_min", lo as f64), ("X_max", hi as f64)],
+        )]
+    }
+
     fn params(&self) -> Vec<(String, f64)> {
         let (lo, hi) = bounds(&self.values());
         vec![("X_min".into(), lo as f64), ("X_max".into(), hi as f64)]

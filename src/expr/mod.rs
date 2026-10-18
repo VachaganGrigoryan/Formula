@@ -21,7 +21,7 @@ pub use ast::{BinOp, Definition, Expr, Func, ParseError, free_params};
 pub use code::{ident, to_code};
 pub use eval::{constant, eval};
 pub use parser::{parse, parse_expr};
-pub use print::{print, to_math};
+pub use print::{expr_math, number, print, to_math};
 
 /// A seeded random AST that [`parse_expr`] accepts: positive literals, only
 /// parseable names, and calls with the right arity. Shared with later tests.

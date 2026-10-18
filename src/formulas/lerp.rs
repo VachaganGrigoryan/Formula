@@ -2,6 +2,7 @@
 
 use egui::{Align2, FontId, Pos2, Rect, Sense, Shape, Stroke, pos2, vec2};
 
+use crate::derive::{Derivation, Step, Substitution};
 use crate::draw::{self, lerp, lerp_color};
 use crate::formula::{Formula, MathText, Palette, Tone};
 
@@ -65,6 +66,75 @@ impl Lerp {
 }
 
 impl Formula for Lerp {
+    fn derivations(&self) -> Vec<Derivation> {
+        let m = MathText::new;
+        let v = |i: &str| m().t("v").sub(i);
+        vec![Derivation::new(
+            "A weighted average",
+            vec![
+                Step::new(
+                    m().t("v(t)")
+                        .tone(Tone::Trace)
+                        .t(" = (1 − t) ")
+                        .append(v("0"))
+                        .t(" + t ")
+                        .append(v("1")),
+                    "Mix the two values with weights 1 − t and t, which add up to 1.",
+                ),
+                Step::new(
+                    m().t("v(t)")
+                        .tone(Tone::Trace)
+                        .t(" = ")
+                        .append(v("0"))
+                        .t(" − t ")
+                        .append(v("0"))
+                        .t(" + t ")
+                        .append(v("1")),
+                    "Multiply out the first term.",
+                ),
+                Step::new(
+                    m().t("v(t)")
+                        .tone(Tone::Trace)
+                        .t(" = ")
+                        .append(v("0"))
+                        .t(" + t (")
+                        .append(v("1"))
+                        .t(" − ")
+                        .append(v("0"))
+                        .t(")"),
+                    "Group the t terms: start at v_0 and move a fraction t of the way to v_1.",
+                ),
+                Step::new(
+                    m().t("v(0) = ")
+                        .append(v("0"))
+                        .t(",   v(1) = ")
+                        .append(v("1")),
+                    "Check the ends: t = 0 gives the start and t = 1 the end.",
+                ),
+                Step::new(
+                    m().t("v(1/2) = (")
+                        .append(v("0"))
+                        .t(" + ")
+                        .append(v("1"))
+                        .t(") / 2"),
+                    "Halfway is the ordinary mean.",
+                ),
+            ],
+        )]
+    }
+
+    fn substitutions(&self) -> Vec<Substitution> {
+        vec![Substitution::new(
+            MathText::new().t("v(t)").tone(Tone::Trace),
+            "v_0 + t (v_1 - v_0)",
+            &[
+                ("t", self.t as f64),
+                ("v_0", self.v0 as f64),
+                ("v_1", self.v1 as f64),
+            ],
+        )]
+    }
+
     fn params(&self) -> Vec<(String, f64)> {
         vec![
             ("t".into(), self.t as f64),

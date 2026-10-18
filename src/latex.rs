@@ -466,7 +466,11 @@ mod tests {
     fn every_equation_converts_to_ascii_latex() {
         let env = ToolEnv::new();
         for tool in TOOLS {
-            for eq in (tool.make)(&env).equations() {
+            let f = (tool.make)(&env);
+            let steps = crate::derive::all_derivations(&*f)
+                .into_iter()
+                .flat_map(|d| d.steps.into_iter().map(|s| s.math));
+            for eq in f.equations().into_iter().chain(steps) {
                 let out = latex_of(&eq);
                 assert!(!out.is_empty(), "{}: {:?} is empty", tool.id, eq.text());
                 let bad: String = out.chars().filter(|c| !c.is_ascii()).collect();

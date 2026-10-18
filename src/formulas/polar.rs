@@ -4,6 +4,7 @@ use std::f32::consts::{PI, TAU};
 
 use egui::{Align2, FontId, Pos2, Rect, Sense, Shape, Stroke, pos2, vec2};
 
+use crate::derive::{Derivation, Step, Substitution};
 use crate::formula::{Formula, MathText, Palette, Tone};
 
 /// `(r, θ)` → `(x, y)`, with y pointing up.
@@ -62,6 +63,51 @@ fn geometry(rect: Rect) -> (Pos2, f32) {
 }
 
 impl Formula for Polar {
+    fn derivations(&self) -> Vec<Derivation> {
+        let m = MathText::new;
+        vec![Derivation::new(
+            "The unit circle",
+            vec![
+                Step::new(
+                    m().t("(cos θ, sin θ)"),
+                    "By definition, cos θ and sin θ are the coordinates of the point at angle θ on the circle of radius 1.",
+                ),
+                Step::new(
+                    m().t("(r cos θ, r sin θ)"),
+                    "A point r times as far out in the same direction has both coordinates scaled by r.",
+                ),
+                Step::new(
+                    m().t("x")
+                        .tone(Tone::X)
+                        .t(" = r cos θ,   ")
+                        .t("y")
+                        .tone(Tone::Y)
+                        .t(" = r sin θ"),
+                    "So these are its Cartesian coordinates.",
+                ),
+                Step::new(
+                    m().t("r = √(x")
+                        .sup("2")
+                        .t(" + y")
+                        .sup("2")
+                        .t("),   θ = atan2(y, x)"),
+                    "Going back: Pythagoras gives r, and the two-argument arctangent gives θ in the right quadrant.",
+                ),
+            ],
+        )]
+    }
+
+    fn substitutions(&self) -> Vec<Substitution> {
+        let values = [
+            ("r", self.radius(self.theta) as f64),
+            ("θ", self.theta as f64),
+        ];
+        vec![
+            Substitution::new(MathText::new().t("x").tone(Tone::X), "r cos(θ)", &values),
+            Substitution::new(MathText::new().t("y").tone(Tone::Y), "r sin(θ)", &values),
+        ]
+    }
+
     fn params(&self) -> Vec<(String, f64)> {
         vec![("r".into(), self.r as f64), ("θ".into(), self.theta as f64)]
     }
