@@ -13,6 +13,7 @@ use super::markdown::{self, Block};
 use super::theme::{Chrome, mono};
 use super::{export, notebook};
 use crate::content::{self, Lang};
+use crate::derive::{Derivation, clamp_steps};
 use crate::formula::{Formula, Palette};
 use crate::formulas::{Tool, ToolEnv};
 use crate::latex;
@@ -22,6 +23,8 @@ pub enum Tab {
     Properties,
     Docs,
     Code,
+    /// Appended last so saved values of the other variants keep their meaning.
+    Derive,
 }
 
 pub struct Inspector {
@@ -40,6 +43,8 @@ pub struct Inspector {
     notice: Option<(String, f64)>,
     /// Widened for reading docs and code (not saved).
     pub maximized: bool,
+    /// The Derive tab's place: which tool, which derivation, how many steps shown.
+    derive_at: (Option<&'static str>, usize, usize),
 }
 
 impl Inspector {
@@ -56,6 +61,7 @@ impl Inspector {
             title_before: None,
             notice: None,
             maximized: false,
+            derive_at: (None, 0, 0),
         }
     }
 
@@ -103,6 +109,7 @@ impl Inspector {
         match ws.request.take() {
             Some(Request::Properties) => self.tab = Tab::Properties,
             Some(Request::Docs) => self.tab = Tab::Docs,
+            Some(Request::Derive) => self.tab = Tab::Derive,
             Some(Request::Code) => self.tab = Tab::Code,
             None => {}
         }
@@ -166,6 +173,7 @@ impl Inspector {
                     for (tab, icon, label) in [
                         (Tab::Properties, Icon::Properties, "Properties"),
                         (Tab::Docs, Icon::Docs, "Docs"),
+                        (Tab::Derive, Icon::Derive, "Derive"),
                         (Tab::Code, Icon::Code, "Code"),
                     ] {
                         if tab_button(ui, icon, label, self.tab == tab, chrome).clicked() {
@@ -204,6 +212,14 @@ impl Inspector {
                     ui,
                     chrome,
                     "Select a viewport, or pick a tool in the library, to read its documentation.",
+                ),
+            },
+            Tab::Derive => match tool {
+                Some(t) => self.derive(ui, ws, t, chrome, palette),
+                None => hint(
+                    ui,
+                    chrome,
+                    "Select a viewport, or pick a tool in the library, to see how its formula is derived.",
                 ),
             },
             Tab::Code => match tool {
@@ -474,6 +490,100 @@ impl Inspector {
                         ui.add_space(24.0);
                     });
             });
+    }
+
+    fn derive(
+        &mut self,
+        ui: &mut egui::Ui,
+        ws: &Workspace,
+        tool: &'static Tool,
+        chrome: &Chrome,
+        palette: &Palette,
+    ) {
+        let list: Vec<Derivation> = self
+            .context_formula(ws)
+            .map(|f| f.derivations())
+            .unwrap_or_default();
+        if list.is_empty() {
+            hint(ui, chrome, "No derivation for this tool yet.");
+            return;
+        }
+        // A different tool starts from its first step.
+        if self.derive_at.0 != Some(tool.id) {
+            self.derive_at = (Some(tool.id), 0, 0);
+        }
+        let lens: Vec<usize> = list.iter().map(|d| d.steps.len()).collect();
+        let (mut pick, mut step) = clamp_steps(self.derive_at.1, self.derive_at.2, &lens);
+        ScrollArea::vertical()
+            .id_salt(("derive", tool.id))
+            .auto_shrink(false)
+            .show(ui, |ui| {
+                Frame::new()
+                    .inner_margin(Margin::symmetric(10, 8))
+                    .show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+                        if list.len() > 1 {
+                            ui.horizontal_wrapped(|ui| {
+                                for (i, d) in list.iter().enumerate() {
+                                    if ui.selectable_label(i == pick, &d.title).clicked()
+                                        && i != pick
+                                    {
+                                        (pick, step) = (i, 0);
+                                    }
+                                }
+                            });
+                            ui.add_space(4.0);
+                        }
+                        let d = &list[pick];
+                        section(ui, chrome, &d.title.to_uppercase());
+                        let n = d.steps.len();
+                        ui.horizontal(|ui| {
+                            if ui
+                                .add_enabled(step > 0, egui::Button::new("Prev"))
+                                .clicked()
+                            {
+                                step -= 1;
+                            }
+                            if ui
+                                .add_enabled(step + 1 < n, egui::Button::new("Next"))
+                                .clicked()
+                            {
+                                step += 1;
+                            }
+                            if ui.button("Show all").clicked() {
+                                step = n.saturating_sub(1);
+                            }
+                            if ui.button("Restart").clicked() {
+                                step = 0;
+                            }
+                            ui.label(
+                                RichText::new(format!("step {} of {n}", (step + 1).min(n)))
+                                    .font(mono(10.5))
+                                    .color(chrome.text_dim),
+                            );
+                        });
+                        ui.add_space(6.0);
+                        for (i, s) in d.steps.iter().enumerate().take(step + 1) {
+                            let newest = i == step;
+                            Frame::new()
+                                .fill(if newest {
+                                    chrome.well
+                                } else {
+                                    Color32::TRANSPARENT
+                                })
+                                .inner_margin(Margin::symmetric(8, 5))
+                                .corner_radius(3)
+                                .show(ui, |ui| {
+                                    ui.set_width(ui.available_width());
+                                    ui.label(s.math.layout(palette, 15.0));
+                                    if !s.why.is_empty() {
+                                        ui.label(RichText::new(&s.why).color(chrome.text_dim));
+                                    }
+                                });
+                        }
+                    });
+            });
+        self.derive_at = (Some(tool.id), pick, step);
     }
 
     fn code(
@@ -792,5 +902,18 @@ mod tests {
             content::code("expression", Lang::TypeScript)
         );
         assert!(code_source(None, "no-such-tool", Lang::Python).is_none());
+    }
+
+    #[test]
+    fn saved_tabs_still_load() {
+        for (json, tab) in [
+            ("\"Properties\"", Tab::Properties),
+            ("\"Docs\"", Tab::Docs),
+            ("\"Code\"", Tab::Code),
+            ("\"Derive\"", Tab::Derive),
+        ] {
+            assert_eq!(serde_json::from_str::<Tab>(json).unwrap(), tab);
+            assert_eq!(serde_json::to_string(&tab).unwrap(), json);
+        }
     }
 }

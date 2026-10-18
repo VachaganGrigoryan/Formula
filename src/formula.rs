@@ -11,6 +11,7 @@ use egui::text::LayoutJob;
 use egui::{Align, Color32, FontId, TextFormat};
 
 use crate::content::Lang;
+use crate::derive::Derivation;
 
 /// Colors shared by every formula, chosen for both light and dark themes.
 #[derive(Clone, Copy, Debug)]
@@ -213,6 +214,11 @@ pub trait Formula {
     /// The current values of the parameters in the equations, named as they
     /// appear there (`"θ"`, `"k_r"`; an underscore starts a subscript).
     fn params(&self) -> Vec<(String, f64)> {
+        Vec::new()
+    }
+
+    /// Step-by-step derivations of the equations, shown in the Derive tab.
+    fn derivations(&self) -> Vec<Derivation> {
         Vec::new()
     }
 

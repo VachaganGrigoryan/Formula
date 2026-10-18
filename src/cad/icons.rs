@@ -21,6 +21,7 @@ pub enum Ui {
     Delete,
     Duplicate,
     Docs,
+    Derive,
     Code,
     Copy,
     Download,
@@ -562,6 +563,14 @@ pub fn ui(painter: &Painter, rect: Rect, icon: Ui, color: Color32) {
             for y in [0.38, 0.55, 0.72] {
                 p.line(&[(0.32, y), (0.7, y)]);
             }
+        }
+        Ui::Derive => {
+            // An equals sign and three lines of working, each shorter than the last.
+            p.line(&[(0.1, 0.4), (0.3, 0.4)]);
+            p.line(&[(0.1, 0.6), (0.3, 0.6)]);
+            p.line(&[(0.42, 0.22), (0.9, 0.22)]);
+            p.line(&[(0.42, 0.5), (0.8, 0.5)]);
+            p.line(&[(0.42, 0.78), (0.68, 0.78)]);
         }
         Ui::Code => {
             p.line(&[(0.32, 0.25), (0.1, 0.5), (0.32, 0.75)]);

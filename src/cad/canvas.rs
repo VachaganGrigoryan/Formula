@@ -64,6 +64,7 @@ impl Default for Settings {
 pub enum Request {
     Properties,
     Docs,
+    Derive,
     Code,
 }
 
@@ -424,6 +425,7 @@ impl Workspace {
             "select" | "v" => self.set_mode(Mode::Select),
             "pan" | "p" | "h" => self.set_mode(Mode::Pan),
             "docs" | "doc" => self.request = Some(Request::Docs),
+            "derive" | "steps" => self.request = Some(Request::Derive),
             "code" => self.request = Some(Request::Code),
             "latex" | "tex" => self.copy_latex(),
             "ipynb" | "notebook" => self.save_notebook(),
@@ -439,7 +441,7 @@ impl Workspace {
             }
             "help" | "?" => {
                 self.say("Tools: type an alias (LOR, BEZ, MAN, VOR, LIF, BUB ...) or a tool name to place it.");
-                self.say("Commands: fit, focus, zoom <pct>, del, dup, undo, redo, all, grid, snap, ortho, pan, select, docs, code, latex, ipynb, plot <expr>, clear.");
+                self.say("Commands: fit, focus, zoom <pct>, del, dup, undo, redo, all, grid, snap, ortho, pan, select, docs, derive, code, latex, ipynb, plot <expr>, clear.");
             }
             _ => {
                 // A tool: by alias, id or name. "place lorenz" works too.
@@ -1582,6 +1584,13 @@ mod tests {
         let copied = ws.clipboard.take().expect("snippet on the clipboard");
         assert!(copied.starts_with("\\begin{gathered}"), "{copied}");
         assert!(copied.contains("\\delta ="), "{copied}");
+    }
+
+    #[test]
+    fn derive_command_opens_the_derive_tab() {
+        let mut ws = workspace();
+        assert!(ws.run_command("derive"));
+        assert_eq!(ws.request, Some(Request::Derive));
     }
 
     #[test]

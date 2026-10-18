@@ -418,6 +418,13 @@ mod tests {
             for eq in f.equations() {
                 text.push_str(&eq.text());
             }
+            for d in f.derivations() {
+                text.push_str(&d.title);
+                for step in &d.steps {
+                    text.push_str(&step.math.text());
+                    text.push_str(&step.why);
+                }
+            }
             // The reference docs are drawn in the same font.
             text.push_str(crate::content::doc(f.id()).unwrap_or(""));
             let missing: String = ctx.fonts_mut(|fonts| {
