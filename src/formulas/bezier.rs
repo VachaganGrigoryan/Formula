@@ -78,7 +78,10 @@ impl Bezier {
 struct State {
     /// Control points as fractions of the curve panel.
     points: [[f32; 2]; 4],
-    t: f32,
+    /// Saved only while it is not animating, so a running animation does
+    /// not count as an unsaved change.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    t: Option<f32>,
     playing: bool,
     construction: bool,
     speed: u32,
@@ -88,7 +91,7 @@ impl Bezier {
     fn state(&self) -> State {
         State {
             points: self.points.map(|p| [p.x, p.y]),
-            t: self.t,
+            t: (!self.playing).then_some(self.t),
             playing: self.playing,
             construction: self.construction,
             speed: self.speed,
@@ -99,8 +102,10 @@ impl Bezier {
         self.points = s
             .points
             .map(|[x, y]| pos2(x.clamp(0.0, 1.0), y.clamp(0.0, 1.0)));
-        self.t = s.t.clamp(0.0, 1.0);
-        self.phase = self.t;
+        if let Some(t) = s.t {
+            self.t = t.clamp(0.0, 1.0);
+            self.phase = self.t;
+        }
         self.playing = s.playing;
         self.construction = s.construction;
         self.speed = s.speed.clamp(1, 10);

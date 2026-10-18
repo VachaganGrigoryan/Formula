@@ -88,7 +88,10 @@ fn arrow(painter: &egui::Painter, from: Pos2, to: Pos2, stroke: Stroke) {
 /// What a sheet saves of a [`Euler`].
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 struct State {
-    theta: f64,
+    /// Saved only while it is not animating, so a running animation does
+    /// not count as an unsaved change.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    theta: Option<f64>,
     terms: u32,
     playing: bool,
 }
@@ -96,14 +99,16 @@ struct State {
 impl Euler {
     fn state(&self) -> State {
         State {
-            theta: self.theta,
+            theta: (!self.playing).then_some(self.theta),
             terms: self.terms,
             playing: self.playing,
         }
     }
 
     fn apply(&mut self, s: State) {
-        self.theta = s.theta.clamp(0.0, TAU);
+        if let Some(theta) = s.theta {
+            self.theta = theta.clamp(0.0, TAU);
+        }
         self.terms = s.terms.min(30);
         self.playing = s.playing;
     }

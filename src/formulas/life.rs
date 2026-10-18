@@ -374,8 +374,10 @@ struct State {
     rate: f32,
     playing: bool,
     wrap: bool,
-    /// The live cells, one string per row: `#` alive, `.` dead.
-    cells: Vec<String>,
+    /// The live cells, one string per row: `#` alive, `.` dead. Saved only
+    /// while paused, since a running simulation changes them every frame.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cells: Option<Vec<String>>,
 }
 
 impl Life {
@@ -388,13 +390,15 @@ impl Life {
             rate: self.rate,
             playing: self.playing,
             wrap: g.wrap,
-            cells: crate::state::grid_rows(
-                g.w,
-                g.h,
-                |x, y| {
-                    if g.alive[y * g.w + x] { '#' } else { '.' }
-                },
-            ),
+            cells: (!self.playing).then(|| {
+                crate::state::grid_rows(
+                    g.w,
+                    g.h,
+                    |x, y| {
+                        if g.alive[y * g.w + x] { '#' } else { '.' }
+                    },
+                )
+            }),
         }
     }
 
@@ -408,7 +412,10 @@ impl Life {
         self.playing = s.playing;
         self.grid.wrap = s.wrap;
         self.load();
-        if let Some(cells) = crate::state::parse_rows(&s.cells, self.grid.w, self.grid.h) {
+        if let Some(cells) = s
+            .cells
+            .and_then(|rows| crate::state::parse_rows(&rows, self.grid.w, self.grid.h))
+        {
             for (k, ch) in cells.iter().flatten().enumerate() {
                 let alive = *ch == '#';
                 self.grid.alive[k] = alive;
@@ -700,7 +707,10 @@ mod tests {
 
     #[test]
     fn painted_cells_survive_a_save() {
-        let mut life = Life::default();
+        let mut life = Life {
+            playing: false,
+            ..Default::default()
+        };
         life.clear();
         life.grid.set(3, 4, true);
         let saved = life.save_state().unwrap();

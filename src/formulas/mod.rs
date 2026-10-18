@@ -499,6 +499,27 @@ mod tests {
         }
     }
 
+    /// A running animation does not change what a sheet saves, so it never
+    /// counts as an unsaved change.
+    #[test]
+    fn animating_leaves_the_saved_state_alone() {
+        let env = ToolEnv::new();
+        let ctx = egui::Context::default();
+        for tool in TOOLS {
+            let mut f = (tool.make)(&env);
+            let s0 = f.save_state().unwrap();
+            f.load_state(&s0);
+            let s1 = f.save_state();
+            for _ in 0..30 {
+                one_frame(&ctx, f.as_mut());
+            }
+            assert_eq!(f.save_state(), s1, "{}", tool.id);
+            for key in s0.as_object().unwrap().keys() {
+                assert!(f.state_params().contains(key), "{}: {key}", tool.id);
+            }
+        }
+    }
+
     /// Flipping any saved toggle survives a round trip.
     #[test]
     fn flipped_toggles_survive() {

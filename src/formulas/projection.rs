@@ -91,7 +91,10 @@ impl Projection {
 struct State {
     focal: f32,
     distance: f32,
-    yaw: f32,
+    /// Saved only while it is not animating, so a running animation does
+    /// not count as an unsaved change.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    yaw: Option<f32>,
     pitch: f32,
     spinning: bool,
 }
@@ -101,7 +104,7 @@ impl Projection {
         State {
             focal: self.focal,
             distance: self.distance,
-            yaw: self.yaw.rem_euclid(std::f32::consts::TAU),
+            yaw: (!self.spinning).then_some(self.yaw.rem_euclid(std::f32::consts::TAU)),
             pitch: self.pitch,
             spinning: self.spinning,
         }
@@ -110,7 +113,9 @@ impl Projection {
     fn apply(&mut self, s: State) {
         self.focal = s.focal.clamp(0.3, 2.5);
         self.distance = s.distance.clamp(2.2, 12.0);
-        self.yaw = s.yaw.rem_euclid(std::f32::consts::TAU);
+        if let Some(yaw) = s.yaw {
+            self.yaw = yaw.rem_euclid(std::f32::consts::TAU);
+        }
         self.pitch = s.pitch.clamp(-1.4, 1.4);
         self.spinning = s.spinning;
     }

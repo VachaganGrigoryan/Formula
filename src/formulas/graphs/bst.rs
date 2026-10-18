@@ -237,7 +237,6 @@ struct State {
     seed: u64,
     /// Frames per second.
     speed: f32,
-    playing: bool,
 }
 
 impl SearchTree {
@@ -248,7 +247,6 @@ impl SearchTree {
             key: self.key,
             seed: self.seed,
             speed: self.player.speed,
-            playing: self.player.playing,
         }
     }
 
@@ -264,7 +262,6 @@ impl SearchTree {
         self.key = s.key.clamp(-99, 99);
         self.seed = s.seed;
         self.player.speed = s.speed.clamp(1.0, 20.0);
-        self.player.playing = s.playing;
     }
 }
 

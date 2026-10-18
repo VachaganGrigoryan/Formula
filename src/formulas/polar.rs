@@ -68,7 +68,10 @@ fn geometry(rect: Rect) -> (Pos2, f32) {
 struct State {
     mode: Mode,
     r: f32,
-    theta: f32,
+    /// Saved only while it is not animating, so a running animation does
+    /// not count as an unsaved change.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    theta: Option<f32>,
     petals: u32,
     playing: bool,
     speed: u32,
@@ -79,7 +82,7 @@ impl Polar {
         State {
             mode: self.mode,
             r: self.r,
-            theta: self.theta,
+            theta: (!self.playing).then_some(self.theta),
             petals: self.petals,
             playing: self.playing,
             speed: self.speed,
@@ -89,7 +92,9 @@ impl Polar {
     fn apply(&mut self, s: State) {
         self.mode = s.mode;
         self.r = s.r.clamp(0.0, 1.0);
-        self.theta = s.theta.rem_euclid(TAU);
+        if let Some(theta) = s.theta {
+            self.theta = theta.rem_euclid(TAU);
+        }
         self.petals = s.petals.clamp(1, 9);
         self.playing = s.playing;
         self.speed = s.speed.clamp(1, 10);

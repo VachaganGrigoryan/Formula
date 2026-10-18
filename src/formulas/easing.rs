@@ -102,8 +102,10 @@ struct State {
     duration: f32,
     looping: bool,
     eased: bool,
-    /// The seed the current targets were drawn from.
-    seed: u64,
+    /// The seed the current targets were drawn from. Saved only when not
+    /// looping, since each loop draws new targets.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    seed: Option<u64>,
 }
 
 impl Easing {
@@ -112,7 +114,7 @@ impl Easing {
             duration: self.duration,
             looping: self.looping,
             eased: self.eased,
-            seed: self.seed.wrapping_sub(1),
+            seed: (!self.looping).then_some(self.seed.wrapping_sub(1)),
         }
     }
 
@@ -120,9 +122,11 @@ impl Easing {
         self.duration = s.duration.clamp(0.3, 4.0);
         self.looping = s.looping;
         self.eased = s.eased;
-        self.seed = s.seed;
-        self.new_targets();
-        self.from = [0.0; BARS];
+        if let Some(seed) = s.seed {
+            self.seed = seed;
+            self.new_targets();
+            self.from = [0.0; BARS];
+        }
     }
 }
 

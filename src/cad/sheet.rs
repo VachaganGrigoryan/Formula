@@ -306,10 +306,10 @@ fn viewport(section: &Section, index: usize, warnings: &mut Vec<String>) -> Opti
         return None;
     };
     if !params.is_empty() {
-        let known = (tool.make)(&ToolEnv::new()).save_state();
+        let known = (tool.make)(&ToolEnv::new()).state_params();
         let mut state = Map::new();
         for (e, name, value) in params {
-            if known.as_ref().is_some_and(|k| k.get(&name).is_some()) {
+            if known.contains(&name) {
                 state.insert(name, value);
             } else {
                 warnings.push(format!(

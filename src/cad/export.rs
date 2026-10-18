@@ -42,6 +42,27 @@ pub fn save(id: &str, file_name: &str, text: &str) -> Result<String, String> {
     }
 }
 
+/// Save a sheet's text. On the desktop this writes `path` (creating its
+/// folder) and returns it; on the web it downloads the file under the last
+/// part of `path`.
+pub fn save_sheet(path: &str, text: &str) -> Result<String, String> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let name = super::files::file_name(path);
+        download(&name, text).map_err(|e| format!("{e:?}"))?;
+        Ok(name)
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let path = std::path::Path::new(path);
+        if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
+            std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+        }
+        std::fs::write(path, text).map_err(|e| e.to_string())?;
+        Ok(path.display().to_string())
+    }
+}
+
 #[cfg(target_arch = "wasm32")]
 fn download(name: &str, text: &str) -> Result<(), wasm_bindgen::JsValue> {
     use wasm_bindgen::JsCast as _;

@@ -267,7 +267,10 @@ struct State {
     count: usize,
     speed: f64,
     trail: usize,
-    yaw: f32,
+    /// Saved only while it is not animating, so a running animation does
+    /// not count as an unsaved change.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    yaw: Option<f32>,
     pitch: f32,
     spinning: bool,
     playing: bool,
@@ -282,7 +285,7 @@ impl Lorenz {
             count: self.count,
             speed: self.speed,
             trail: self.trail,
-            yaw: self.yaw.rem_euclid(std::f32::consts::TAU),
+            yaw: (!self.spinning).then_some(self.yaw.rem_euclid(std::f32::consts::TAU)),
             pitch: self.pitch,
             spinning: self.spinning,
             playing: self.playing,
@@ -296,7 +299,9 @@ impl Lorenz {
         self.count = s.count.clamp(1, 3);
         self.speed = s.speed.clamp(0.05, 3.0);
         self.trail = s.trail.clamp(200, 12000);
-        self.yaw = s.yaw.rem_euclid(std::f32::consts::TAU);
+        if let Some(yaw) = s.yaw {
+            self.yaw = yaw.rem_euclid(std::f32::consts::TAU);
+        }
         self.pitch = s.pitch.clamp(-1.5, 1.5);
         self.spinning = s.spinning;
         self.playing = s.playing;

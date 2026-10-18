@@ -266,7 +266,10 @@ impl Pythagoras {
 struct State {
     a: f64,
     b: f64,
-    t: f64,
+    /// Saved only while it is not animating, so a running animation does
+    /// not count as an unsaved change.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    t: Option<f64>,
     playing: bool,
     mode: Mode,
 }
@@ -276,7 +279,7 @@ impl Pythagoras {
         State {
             a: self.a,
             b: self.b,
-            t: self.t,
+            t: (!self.playing).then_some(self.t),
             playing: self.playing,
             mode: self.mode,
         }
@@ -285,8 +288,10 @@ impl Pythagoras {
     fn apply(&mut self, s: State) {
         self.a = s.a.clamp(0.5, 6.0);
         self.b = s.b.clamp(0.5, 6.0);
-        self.t = s.t.clamp(0.0, 1.0);
-        self.phase = CYCLE * (0.1 + 0.35 * self.t);
+        if let Some(t) = s.t {
+            self.t = t.clamp(0.0, 1.0);
+            self.phase = CYCLE * (0.1 + 0.35 * self.t);
+        }
         self.playing = s.playing;
         self.mode = s.mode;
     }

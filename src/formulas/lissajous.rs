@@ -61,7 +61,10 @@ struct State {
     a: u32,
     b: u32,
     /// Phase offset of x, in units of π.
-    delta: f64,
+    /// Saved only while it is not animating, so a running animation does
+    /// not count as an unsaved change.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    delta: Option<f64>,
     speed: u32,
     playing: bool,
     drift: bool,
@@ -75,7 +78,7 @@ impl Lissajous {
             amp_y: self.amp_y,
             a: self.a,
             b: self.b,
-            delta: self.delta,
+            delta: (!self.drift).then_some(self.delta),
             speed: self.speed,
             playing: self.playing,
             drift: self.drift,
@@ -88,7 +91,9 @@ impl Lissajous {
         self.amp_y = s.amp_y.clamp(0.1, 1.0);
         self.a = s.a.clamp(1, 9);
         self.b = s.b.clamp(1, 9);
-        self.delta = s.delta.rem_euclid(2.0);
+        if let Some(delta) = s.delta {
+            self.delta = delta.rem_euclid(2.0);
+        }
         self.speed = s.speed.clamp(1, 10);
         self.playing = s.playing;
         self.drift = s.drift;

@@ -68,7 +68,10 @@ impl Lerp {
 /// What a sheet saves of a [`Lerp`].
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 struct State {
-    t: f32,
+    /// Saved only while it is not animating, so a running animation does
+    /// not count as an unsaved change.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    t: Option<f32>,
     playing: bool,
     speed: u32,
     v0: f32,
@@ -80,7 +83,7 @@ struct State {
 impl Lerp {
     fn state(&self) -> State {
         State {
-            t: self.t,
+            t: (!self.playing).then_some(self.t),
             playing: self.playing,
             speed: self.speed,
             v0: self.v0,
@@ -90,8 +93,10 @@ impl Lerp {
     }
 
     fn apply(&mut self, s: State) {
-        self.t = s.t.clamp(0.0, 1.0);
-        self.phase = self.t;
+        if let Some(t) = s.t {
+            self.t = t.clamp(0.0, 1.0);
+            self.phase = self.t;
+        }
         self.playing = s.playing;
         self.speed = s.speed.clamp(1, 10);
         self.v0 = s.v0.clamp(0.0, 100.0);

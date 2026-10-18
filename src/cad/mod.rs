@@ -6,6 +6,7 @@ pub mod camera;
 pub mod canvas;
 pub mod chrome;
 pub mod export;
+pub mod files;
 pub mod fwb;
 pub mod highlight;
 pub mod history;

@@ -148,7 +148,6 @@ impl Pathfinding {
 struct State {
     /// Steps per second.
     speed: f32,
-    playing: bool,
     /// Paint mud instead of walls.
     mud: bool,
 }
@@ -157,7 +156,6 @@ impl Pathfinding {
     fn state(&self) -> State {
         State {
             speed: self.player.speed,
-            playing: self.player.playing,
             mud: self.mud,
         }
     }
@@ -165,7 +163,6 @@ impl Pathfinding {
     fn apply(&mut self, s: State) {
         self.sync();
         self.player.speed = s.speed.clamp(1.0, 2000.0);
-        self.player.playing = s.playing;
         self.mud = s.mud;
     }
 }

@@ -134,7 +134,6 @@ struct Saved {
     chosen: Vec<String>,
     /// Steps per second, the same for every lane.
     speed: f32,
-    running: bool,
 }
 
 impl Race {
@@ -146,7 +145,6 @@ impl Race {
                 .filter_map(|a| serde_json::to_value(a).ok()?.as_str().map(str::to_owned))
                 .collect(),
             speed: self.speed,
-            running: self.running,
         }
     }
 
@@ -165,12 +163,11 @@ impl Race {
         // Build the lanes first, so their own pacing does not replace the speed.
         self.sync();
         self.speed = s.speed.clamp(1.0, 5000.0);
-        self.running = s.running;
     }
 }
 
 impl Formula for Race {
-    crate::state_hooks!();
+    crate::state_hooks!(Saved);
 
     fn id(&self) -> &'static str {
         "sorting-race"

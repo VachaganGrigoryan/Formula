@@ -10,8 +10,8 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 
 /// `current` with every top-level field of `v` applied that deserializes on
-/// its own. Unknown fields, fields of the wrong type and a `v` that is not an
-/// object leave the current values.
+/// its own. Fields of the wrong type and a `v` that is not an object leave the
+/// current values; unknown fields are ignored.
 pub fn merge<T: Serialize + DeserializeOwned + Clone>(current: &T, v: &Value) -> T {
     let (Ok(Value::Object(mut base)), Some(fields)) =
         (serde_json::to_value(current), v.as_object())
@@ -20,15 +20,19 @@ pub fn merge<T: Serialize + DeserializeOwned + Clone>(current: &T, v: &Value) ->
     };
     let mut result = current.clone();
     for (key, value) in fields {
-        let Some(old) = base.get(key).cloned() else {
-            continue;
-        };
-        base.insert(key.clone(), value.clone());
+        // Fields `current` leaves out (an `Option` skipped when `None`) are
+        // tried too; unknown ones deserialize and are ignored.
+        let old = base.insert(key.clone(), value.clone());
         match serde_json::from_value::<T>(Value::Object(base.clone())) {
             Ok(t) => result = t,
-            Err(_) => {
-                base.insert(key.clone(), old);
-            }
+            Err(_) => match old {
+                Some(old) => {
+                    base.insert(key.clone(), old);
+                }
+                None => {
+                    base.remove(key);
+                }
+            },
         }
     }
     result
@@ -41,6 +45,9 @@ pub fn merge<T: Serialize + DeserializeOwned + Clone>(current: &T, v: &Value) ->
 #[macro_export]
 macro_rules! state_hooks {
     () => {
+        $crate::state_hooks!(State);
+    };
+    ($state:ty) => {
         fn save_state(&self) -> Option<serde_json::Value> {
             $crate::state::to_value(&self.state())
         }
@@ -49,7 +56,51 @@ macro_rules! state_hooks {
             let s = $crate::state::merge(&self.state(), v);
             self.apply(s);
         }
+
+        fn state_params(&self) -> Vec<String> {
+            $crate::state::field_names::<$state>()
+                .iter()
+                .map(|f| (*f).to_owned())
+                .collect()
+        }
     };
+}
+
+/// The field names of a serde struct, including those it leaves out when
+/// saving (an `Option` that is `None`).
+pub fn field_names<T: DeserializeOwned>() -> &'static [&'static str] {
+    use serde::de::{Error as _, Visitor, value::Error};
+
+    /// A deserializer that only records the fields a struct asks for.
+    struct Fields<'a>(&'a mut &'static [&'static str]);
+
+    impl<'de> serde::Deserializer<'de> for Fields<'_> {
+        type Error = Error;
+
+        fn deserialize_any<V: Visitor<'de>>(self, _: V) -> Result<V::Value, Error> {
+            Err(Error::custom("not a struct"))
+        }
+
+        fn deserialize_struct<V: Visitor<'de>>(
+            self,
+            _: &'static str,
+            fields: &'static [&'static str],
+            _: V,
+        ) -> Result<V::Value, Error> {
+            *self.0 = fields;
+            Err(Error::custom("fields recorded"))
+        }
+
+        serde::forward_to_deserialize_any! {
+            bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string
+            bytes byte_buf option unit unit_struct newtype_struct seq tuple
+            tuple_struct map enum identifier ignored_any
+        }
+    }
+
+    let mut fields: &'static [&'static str] = &[];
+    let _ = T::deserialize(Fields(&mut fields));
+    fields
 }
 
 /// `v` as JSON, with `f32` fields written in their shortest form (`0.78`,
@@ -103,6 +154,23 @@ mod tests {
         );
         assert_eq!(merge(&s, &json!(42)), s);
         assert_eq!(merge(&s, &json!({"a": null})), s);
+    }
+
+    #[derive(Clone, serde::Serialize, serde::Deserialize)]
+    struct WithOptional {
+        a: f32,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        t: Option<f32>,
+    }
+
+    #[test]
+    fn field_names_include_skipped_options() {
+        assert_eq!(field_names::<WithOptional>(), ["a", "t"]);
+        // A field the current value leaves out can still be loaded.
+        let w = merge(&WithOptional { a: 1.0, t: None }, &json!({"t": 0.5}));
+        assert_eq!(w.t, Some(0.5));
+        let w = merge(&w, &json!({"t": "x", "zzz": 2}));
+        assert_eq!(w.t, Some(0.5));
     }
 
     #[test]
