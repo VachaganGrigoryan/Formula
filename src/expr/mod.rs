@@ -1,7 +1,8 @@
-//! A small in-repo expression engine: lexer, AST, Pratt parser and printer.
+//! A small in-repo expression engine: lexer, AST, Pratt parser, evaluator,
+//! and printers for text, typeset math ([`to_math`]) and code ([`to_code`]).
 //!
-//! This module is UI-free (no egui) so it can be unit-tested and reused by
-//! the evaluator, the exporters and the `expression` tool.
+//! Apart from building a `MathText`, this module does not touch egui, so it is
+//! unit-tested on its own and shared by the `expression` tool and its exports.
 //!
 //! Variables follow the single-letter convention of Desmos: a run of letters
 //! splits into one variable per letter (`ab` is `a * b`), except for known
@@ -10,13 +11,17 @@
 //! `π * x` and `sinx` is `sin` applied to `x`.
 
 mod ast;
+mod code;
+mod eval;
 mod lexer;
 mod parser;
 mod print;
 
 pub use ast::{BinOp, Definition, Expr, Func, ParseError, free_params};
+pub use code::{ident, to_code};
+pub use eval::{constant, eval};
 pub use parser::{parse, parse_expr};
-pub use print::print;
+pub use print::{print, to_math};
 
 /// A seeded random AST that [`parse_expr`] accepts: positive literals, only
 /// parseable names, and calls with the right arity. Shared with later tests.
