@@ -6,7 +6,8 @@ use std::rc::Rc;
 
 use crate::rng::Rng;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Distribution {
     Random,
     NearlySorted,
@@ -65,6 +66,10 @@ pub fn generate(n: usize, dist: Distribution, seed: u64) -> Vec<u32> {
     v
 }
 
+/// The list sizes the size slider offers.
+pub const MIN_N: usize = 5;
+pub const MAX_N: usize = 200;
+
 pub struct Dataset {
     pub n: usize,
     pub dist: Distribution,
@@ -105,6 +110,19 @@ impl Dataset {
     pub fn regenerate(&mut self) {
         self.values = generate(self.n, self.dist, self.seed);
         self.generation += 1;
+    }
+
+    pub fn seed(&self) -> u64 {
+        self.seed
+    }
+
+    /// Set the size, distribution and seed (e.g. from a sheet) and rebuild.
+    /// The size is kept within the slider's range.
+    pub fn set(&mut self, n: usize, dist: Distribution, seed: u64) {
+        self.n = n.clamp(MIN_N, MAX_N);
+        self.dist = dist;
+        self.seed = seed;
+        self.regenerate();
     }
 
     /// A fresh random arrangement.

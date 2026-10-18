@@ -52,7 +52,9 @@ impl Session {
             .spacing([12.0, 10.0])
             .show(ui, |ui| {
                 ui.label("List size");
-                changed |= ui.add(egui::Slider::new(&mut data.n, 5..=200)).changed();
+                changed |= ui
+                    .add(egui::Slider::new(&mut data.n, data::MIN_N..=data::MAX_N))
+                    .changed();
                 ui.end_row();
                 ui.label("Data");
                 ui.horizontal_wrapped(|ui| {

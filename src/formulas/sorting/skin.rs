@@ -10,7 +10,8 @@ use egui::{Color32, Pos2, Rect, Shape, Stroke, pos2, vec2};
 
 use crate::formulas::luminance::hsv_to_srgb;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Skin {
     Bars,
     Radial,

@@ -11,7 +11,7 @@ use crate::cad::chrome::{self, Panels};
 use crate::cad::inspector::{Inspector, Tab};
 use crate::cad::theme::{self, Chrome};
 use crate::content::Lang;
-use crate::formulas;
+use crate::formulas::{self, ToolEnv};
 
 /// Storage key for the saved workspace.
 const KEY: &str = "board-v1";
@@ -28,6 +28,9 @@ struct Saved {
     inspector: bool,
     tab: Tab,
     lang: Lang,
+    /// The board's shared data (sorting list, graph grid); absent in older saves.
+    #[serde(default)]
+    shared: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
 pub struct FormulaApp {
@@ -57,7 +60,11 @@ impl FormulaApp {
             .map(str::to_owned);
         let mut app = match saved {
             Some(s) if !s.viewports.is_empty() => {
-                let board = Board::from_model(&s.viewports);
+                let mut env = ToolEnv::new();
+                if let Some(shared) = &s.shared {
+                    env.load_state(shared);
+                }
+                let board = Board::from_model(&s.viewports, env);
                 let mut panels = Panels::new(s.dark);
                 panels.browser = s.browser;
                 panels.inspector = s.inspector;
@@ -234,6 +241,7 @@ impl eframe::App for FormulaApp {
             inspector: self.panels.inspector,
             tab: self.inspector.tab,
             lang: self.inspector.lang,
+            shared: Some(self.ws.board.env.save_state()),
         };
         eframe::set_value(storage, KEY, &saved);
     }

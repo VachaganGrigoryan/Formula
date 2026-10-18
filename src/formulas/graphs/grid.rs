@@ -128,6 +128,51 @@ impl Grid {
         true
     }
 
+    /// The grid as one string per row: `.` open, `#` wall, `~` mud, `S` start,
+    /// `G` goal.
+    pub fn to_rows(&self) -> Vec<String> {
+        crate::state::grid_rows(self.w, self.h, |x, y| {
+            let i = self.index(x, y);
+            match () {
+                _ if i == self.start => 'S',
+                _ if i == self.goal => 'G',
+                _ if self.walls[i] => '#',
+                _ if self.weight[i] > 1 => '~',
+                _ => '.',
+            }
+        })
+    }
+
+    /// Replace the cells with `rows` (as written by [`Grid::to_rows`]). Rows of
+    /// the wrong size, or without exactly one start and one goal, are refused.
+    pub fn load_rows(&mut self, rows: &[String]) -> bool {
+        let Some(cells) = crate::state::parse_rows(rows, self.w, self.h) else {
+            return false;
+        };
+        let find = |c: char| -> Vec<usize> {
+            let mut at = Vec::new();
+            for (y, row) in cells.iter().enumerate() {
+                for (x, &ch) in row.iter().enumerate() {
+                    if ch == c {
+                        at.push(y * self.w + x);
+                    }
+                }
+            }
+            at
+        };
+        let (&[start], &[goal]) = (find('S').as_slice(), find('G').as_slice()) else {
+            return false;
+        };
+        for (i, ch) in cells.iter().flatten().enumerate() {
+            self.walls[i] = *ch == '#';
+            self.weight[i] = if *ch == '~' { MUD } else { 1 };
+        }
+        self.start = start;
+        self.goal = goal;
+        self.generation += 1;
+        true
+    }
+
     /// Open every cell and drop all mud; the markers stay where they are.
     pub fn clear(&mut self) {
         self.walls.fill(false);
@@ -244,6 +289,23 @@ mod tests {
             }
         }
         seen
+    }
+
+    #[test]
+    fn rows_round_trip() {
+        let mut g = Grid::new(8, 5);
+        g.set_wall(g.index(3, 1), true);
+        g.set_weight(g.index(4, 3), MUD);
+        let rows = g.to_rows();
+        assert_eq!(rows[2], ".S....G.");
+        let mut h = Grid::new(8, 5);
+        assert!(h.load_rows(&rows));
+        assert_eq!(h.to_rows(), rows);
+        assert!(h.generation() > 0);
+        // Wrong sizes and missing markers are refused.
+        assert!(!h.load_rows(&rows[..4]));
+        let no_goal: Vec<String> = rows.iter().map(|r| r.replace('G', ".")).collect();
+        assert!(!h.load_rows(&no_goal));
     }
 
     #[test]

@@ -29,6 +29,8 @@ pub mod rotation;
 pub mod sorting;
 pub mod voronoi;
 
+use serde_json::{Map, Value, json};
+
 use crate::formula::Formula;
 
 // Sidebar groups. Categories appear in the order their first formula is registered.
@@ -65,6 +67,78 @@ impl ToolEnv {
         Self {
             sorting: sorting::Session::new(),
             graphs: graphs::Session::new(),
+        }
+    }
+}
+
+/// The shared sorting list, as saved.
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct SortingState {
+    n: usize,
+    dist: sorting::data::Distribution,
+    seed: u64,
+    skin: sorting::skin::Skin,
+}
+
+/// The shared MST graph, as saved.
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct GraphState {
+    points: Vec<[f32; 2]>,
+    seed: u64,
+}
+
+impl ToolEnv {
+    /// What the board's viewports share, as JSON fields (a sheet's SHARED
+    /// section): the sorting list, the pathfinding grid and the MST graph.
+    pub fn save_state(&self) -> Map<String, Value> {
+        let data = self.sorting.data.borrow();
+        let sorting = SortingState {
+            n: data.n,
+            dist: data.dist,
+            seed: data.seed(),
+            skin: self.sorting.view.borrow().skin,
+        };
+        let graph = self.graphs.graph.borrow();
+        let graph = GraphState {
+            points: graph.points().to_vec(),
+            seed: graph.seed(),
+        };
+        let mut map = Map::new();
+        map.insert("sorting".into(), json!(sorting));
+        map.insert("grid".into(), json!(self.graphs.grid.borrow().to_rows()));
+        map.insert("graph".into(), json!(graph));
+        map
+    }
+
+    /// Restore what [`ToolEnv::save_state`] wrote, in place, so viewports
+    /// already sharing this data see the change. Missing or malformed fields
+    /// keep the current data.
+    pub fn load_state(&mut self, state: &Map<String, Value>) {
+        if let Some(v) = state.get("sorting") {
+            let current = {
+                let data = self.sorting.data.borrow();
+                SortingState {
+                    n: data.n,
+                    dist: data.dist,
+                    seed: data.seed(),
+                    skin: self.sorting.view.borrow().skin,
+                }
+            };
+            let s = crate::state::merge(&current, v);
+            self.sorting.data.borrow_mut().set(s.n, s.dist, s.seed);
+            self.sorting.view.borrow_mut().skin = s.skin;
+        }
+        if let Some(rows) = state
+            .get("grid")
+            .and_then(|v| serde_json::from_value::<Vec<String>>(v.clone()).ok())
+        {
+            self.graphs.grid.borrow_mut().load_rows(&rows);
+        }
+        if let Some(g) = state
+            .get("graph")
+            .and_then(|v| serde_json::from_value::<GraphState>(v.clone()).ok())
+        {
+            self.graphs.graph.borrow_mut().set_points(&g.points, g.seed);
         }
     }
 }
@@ -370,6 +444,32 @@ pub fn registry() -> Vec<Box<dyn Formula>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shared_state_round_trips() {
+        let env = ToolEnv::new();
+        env.sorting.data.borrow_mut().shuffle();
+        {
+            let mut grid = env.graphs.grid.borrow_mut();
+            let i = grid.index(5, 5);
+            grid.set_wall(i, true);
+        }
+        env.graphs.graph.borrow_mut().move_point(0, [0.5, 0.5]);
+        let saved = env.save_state();
+        let mut fresh = ToolEnv::new();
+        fresh.load_state(&saved);
+        assert_eq!(fresh.save_state(), saved);
+        // Hostile values are clamped or ignored.
+        let mut hostile = saved.clone();
+        hostile.insert("sorting".into(), json!({"n": 100000, "seed": "x"}));
+        hostile.insert("grid".into(), json!(["..", ".."]));
+        hostile.insert("graph".into(), json!({"points": [[1e30, -5.0]], "seed": 3}));
+        fresh.load_state(&hostile);
+        assert_eq!(fresh.sorting.data.borrow().n, sorting::data::MAX_N);
+        assert_eq!(json!(fresh.graphs.grid.borrow().to_rows()), saved["grid"]);
+        assert_eq!(fresh.graphs.graph.borrow().points(), &[[0.98, 0.02]]);
+        fresh.load_state(&Map::new());
+    }
 
     #[test]
     fn tools_match_their_formulas() {
