@@ -73,7 +73,43 @@ impl Bezier {
     }
 }
 
+/// What a sheet saves of a [`Bezier`].
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct State {
+    /// Control points as fractions of the curve panel.
+    points: [[f32; 2]; 4],
+    t: f32,
+    playing: bool,
+    construction: bool,
+    speed: u32,
+}
+
+impl Bezier {
+    fn state(&self) -> State {
+        State {
+            points: self.points.map(|p| [p.x, p.y]),
+            t: self.t,
+            playing: self.playing,
+            construction: self.construction,
+            speed: self.speed,
+        }
+    }
+
+    fn apply(&mut self, s: State) {
+        self.points = s
+            .points
+            .map(|[x, y]| pos2(x.clamp(0.0, 1.0), y.clamp(0.0, 1.0)));
+        self.t = s.t.clamp(0.0, 1.0);
+        self.phase = self.t;
+        self.playing = s.playing;
+        self.construction = s.construction;
+        self.speed = s.speed.clamp(1, 10);
+    }
+}
+
 impl Formula for Bezier {
+    crate::state_hooks!();
+
     fn params(&self) -> Vec<(String, f64)> {
         vec![("t".into(), self.t as f64)]
     }

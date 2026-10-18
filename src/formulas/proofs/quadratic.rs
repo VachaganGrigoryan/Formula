@@ -91,7 +91,42 @@ impl Quadratic {
     }
 }
 
+/// What a sheet saves of a [`Quadratic`].
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct State {
+    a: f64,
+    b: f64,
+    c: f64,
+    /// The view: center x, center y, and world units per point.
+    view: [f64; 3],
+}
+
+impl Quadratic {
+    fn state(&self) -> State {
+        State {
+            a: self.a,
+            b: self.b,
+            c: self.c,
+            view: [self.view.cx, self.view.cy, self.view.scale],
+        }
+    }
+
+    fn apply(&mut self, s: State) {
+        self.a = s.a.clamp(-5.0, 5.0);
+        self.b = s.b.clamp(-5.0, 5.0);
+        self.c = s.c.clamp(-5.0, 5.0);
+        let [cx, cy, scale] = s.view;
+        self.view = View {
+            cx: cx.clamp(-1e9, 1e9),
+            cy: cy.clamp(-1e9, 1e9),
+            scale: scale.clamp(1e-9, 1e9),
+        };
+    }
+}
+
 impl Formula for Quadratic {
+    crate::state_hooks!();
+
     fn id(&self) -> &'static str {
         "quadratic-formula"
     }

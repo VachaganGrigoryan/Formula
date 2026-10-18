@@ -86,7 +86,39 @@ impl Projection {
     }
 }
 
+/// What a sheet saves of a [`Projection`].
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct State {
+    focal: f32,
+    distance: f32,
+    yaw: f32,
+    pitch: f32,
+    spinning: bool,
+}
+
+impl Projection {
+    fn state(&self) -> State {
+        State {
+            focal: self.focal,
+            distance: self.distance,
+            yaw: self.yaw.rem_euclid(std::f32::consts::TAU),
+            pitch: self.pitch,
+            spinning: self.spinning,
+        }
+    }
+
+    fn apply(&mut self, s: State) {
+        self.focal = s.focal.clamp(0.3, 2.5);
+        self.distance = s.distance.clamp(2.2, 12.0);
+        self.yaw = s.yaw.rem_euclid(std::f32::consts::TAU);
+        self.pitch = s.pitch.clamp(-1.4, 1.4);
+        self.spinning = s.spinning;
+    }
+}
+
 impl Formula for Projection {
+    crate::state_hooks!();
+
     fn params(&self) -> Vec<(String, f64)> {
         vec![("f".into(), self.focal as f64)]
     }

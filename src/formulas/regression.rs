@@ -9,6 +9,9 @@ use crate::rng::Rng;
 
 pub type Point = [f32; 2];
 
+/// The most points a sheet can load.
+const MAX_POINTS: usize = 500;
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Fit {
     pub slope: f32,
@@ -125,7 +128,44 @@ fn to_data(plot: Rect, p: Pos2) -> Point {
     ]
 }
 
+/// What a sheet saves of a [`Regression`].
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct State {
+    points: Vec<Point>,
+    seed: u64,
+    noise: f32,
+    residuals: bool,
+    squares: bool,
+}
+
+impl Regression {
+    fn state(&self) -> State {
+        State {
+            points: self.points.clone(),
+            seed: self.seed,
+            noise: self.noise,
+            residuals: self.residuals,
+            squares: self.squares,
+        }
+    }
+
+    fn apply(&mut self, s: State) {
+        self.points = s
+            .points
+            .iter()
+            .take(MAX_POINTS)
+            .map(|p| [p[0].clamp(0.0, 10.0), p[1].clamp(0.0, 10.0)])
+            .collect();
+        self.seed = s.seed;
+        self.noise = s.noise.clamp(0.0, 3.0);
+        self.residuals = s.residuals;
+        self.squares = s.squares;
+    }
+}
+
 impl Formula for Regression {
+    crate::state_hooks!();
+
     fn derivations(&self) -> Vec<Derivation> {
         let m = MathText::new;
         vec![Derivation::new(
@@ -466,6 +506,21 @@ impl Formula for Regression {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn moved_points_survive_a_save() {
+        let r = Regression {
+            points: vec![[1.0, 2.0], [3.0, 3.5], [8.0, 9.0]],
+            ..Default::default()
+        };
+        let saved = r.save_state().unwrap();
+        let mut back = Regression::default();
+        back.load_state(&saved);
+        assert_eq!(back.points, r.points);
+        let many = vec![[1.0, 1.0]; 10_000];
+        back.load_state(&serde_json::json!({ "points": many }));
+        assert_eq!(back.points.len(), MAX_POINTS);
+    }
 
     #[test]
     fn exact_line() {

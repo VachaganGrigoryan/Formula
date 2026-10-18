@@ -175,7 +175,46 @@ impl ForceLayout {
     }
 }
 
+/// What a sheet saves of a [`ForceLayout`].
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct State {
+    /// The graph is generated from this seed.
+    seed: u64,
+    k: f32,
+    rest: f32,
+    kr: f32,
+    running: bool,
+    show_forces: bool,
+}
+
+impl ForceLayout {
+    fn state(&self) -> State {
+        State {
+            seed: self.seed,
+            k: self.params.k,
+            rest: self.params.rest,
+            kr: self.params.kr,
+            running: self.running,
+            show_forces: self.show_forces,
+        }
+    }
+
+    fn apply(&mut self, s: State) {
+        if s.seed != self.seed {
+            self.seed = s.seed;
+            (self.nodes, self.edges) = random_graph(self.seed);
+        }
+        self.params.k = s.k.clamp(0.005, 0.2);
+        self.params.rest = s.rest.clamp(20.0, 140.0);
+        self.params.kr = s.kr.clamp(200.0, 20000.0);
+        self.running = s.running;
+        self.show_forces = s.show_forces;
+    }
+}
+
 impl Formula for ForceLayout {
+    crate::state_hooks!();
+
     fn params(&self) -> Vec<(String, f64)> {
         vec![
             ("k".into(), self.params.k as f64),

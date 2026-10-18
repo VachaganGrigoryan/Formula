@@ -65,7 +65,46 @@ impl Lerp {
     }
 }
 
+/// What a sheet saves of a [`Lerp`].
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct State {
+    t: f32,
+    playing: bool,
+    speed: u32,
+    v0: f32,
+    v1: f32,
+    /// The endpoints in the plane panel, as fractions of it.
+    ends: [[f32; 2]; 2],
+}
+
+impl Lerp {
+    fn state(&self) -> State {
+        State {
+            t: self.t,
+            playing: self.playing,
+            speed: self.speed,
+            v0: self.v0,
+            v1: self.v1,
+            ends: self.ends.map(|p| [p.x, p.y]),
+        }
+    }
+
+    fn apply(&mut self, s: State) {
+        self.t = s.t.clamp(0.0, 1.0);
+        self.phase = self.t;
+        self.playing = s.playing;
+        self.speed = s.speed.clamp(1, 10);
+        self.v0 = s.v0.clamp(0.0, 100.0);
+        self.v1 = s.v1.clamp(0.0, 100.0);
+        self.ends = s
+            .ends
+            .map(|[x, y]| pos2(x.clamp(0.0, 1.0), y.clamp(0.0, 1.0)));
+    }
+}
+
 impl Formula for Lerp {
+    crate::state_hooks!();
+
     fn derivations(&self) -> Vec<Derivation> {
         let m = MathText::new;
         let v = |i: &str| m().t("v").sub(i);

@@ -182,7 +182,8 @@ struct Particle {
     life: f32,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 enum Coloring {
     Angle,
     Ink,
@@ -307,7 +308,58 @@ impl FlowField {
     }
 }
 
+/// What a sheet saves of a [`FlowField`].
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct State {
+    /// The noise is generated from this seed.
+    seed: u64,
+    count: usize,
+    zoom: f32,
+    turns: f32,
+    speed: f32,
+    fade: f32,
+    evolve: f32,
+    coloring: Coloring,
+    show_field: bool,
+    playing: bool,
+}
+
+impl FlowField {
+    fn state(&self) -> State {
+        State {
+            seed: self.seed,
+            count: self.count,
+            zoom: self.zoom,
+            turns: self.turns,
+            speed: self.speed,
+            fade: self.fade,
+            evolve: self.evolve,
+            coloring: self.coloring,
+            show_field: self.show_field,
+            playing: self.playing,
+        }
+    }
+
+    fn apply(&mut self, s: State) {
+        if s.seed != self.seed {
+            self.seed = s.seed;
+            self.noise = Perlin::new(self.seed);
+        }
+        self.count = s.count.clamp(100, 5000);
+        self.zoom = s.zoom.clamp(0.001, 0.03);
+        self.turns = s.turns.clamp(0.25, 4.0);
+        self.speed = s.speed.clamp(10.0, 240.0);
+        self.fade = s.fade.clamp(0.002, 0.2);
+        self.evolve = s.evolve.clamp(0.0, 0.5);
+        self.coloring = s.coloring;
+        self.show_field = s.show_field;
+        self.playing = s.playing;
+    }
+}
+
 impl Formula for FlowField {
+    crate::state_hooks!();
+
     fn params(&self) -> Vec<(String, f64)> {
         vec![
             ("s".into(), self.zoom as f64),

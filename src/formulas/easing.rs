@@ -96,7 +96,39 @@ fn layout(rect: Rect) -> Layout {
     }
 }
 
+/// What a sheet saves of a [`Easing`].
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct State {
+    duration: f32,
+    looping: bool,
+    eased: bool,
+    /// The seed the current targets were drawn from.
+    seed: u64,
+}
+
+impl Easing {
+    fn state(&self) -> State {
+        State {
+            duration: self.duration,
+            looping: self.looping,
+            eased: self.eased,
+            seed: self.seed.wrapping_sub(1),
+        }
+    }
+
+    fn apply(&mut self, s: State) {
+        self.duration = s.duration.clamp(0.3, 4.0);
+        self.looping = s.looping;
+        self.eased = s.eased;
+        self.seed = s.seed;
+        self.new_targets();
+        self.from = [0.0; BARS];
+    }
+}
+
 impl Formula for Easing {
+    crate::state_hooks!();
+
     fn substitutions(&self) -> Vec<Substitution> {
         vec![Substitution::new(
             MathText::new().t("f(t)").tone(Tone::Trace),

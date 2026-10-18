@@ -34,6 +34,30 @@ pub fn merge<T: Serialize + DeserializeOwned + Clone>(current: &T, v: &Value) ->
     result
 }
 
+/// The `save_state` / `load_state` pair of a formula, inside its
+/// `impl Formula`. The formula provides `fn state(&self) -> State` (a serde
+/// struct of what it saves) and `fn apply(&mut self, s: State)`, which clamps
+/// every value to its slider range before using it.
+#[macro_export]
+macro_rules! state_hooks {
+    () => {
+        fn save_state(&self) -> Option<serde_json::Value> {
+            $crate::state::to_value(&self.state())
+        }
+
+        fn load_state(&mut self, v: &serde_json::Value) {
+            let s = $crate::state::merge(&self.state(), v);
+            self.apply(s);
+        }
+    };
+}
+
+/// `v` as JSON, with `f32` fields written in their shortest form (`0.78`,
+/// not `0.7799999713897705` as `serde_json::to_value` gives).
+pub fn to_value<T: Serialize>(v: &T) -> Option<Value> {
+    serde_json::from_str(&serde_json::to_string(v).ok()?).ok()
+}
+
 /// A grid as one string per row, the character for each cell from `cell`.
 pub fn grid_rows(w: usize, h: usize, cell: impl Fn(usize, usize) -> char) -> Vec<String> {
     (0..h)
@@ -79,6 +103,13 @@ mod tests {
         );
         assert_eq!(merge(&s, &json!(42)), s);
         assert_eq!(merge(&s, &json!({"a": null})), s);
+    }
+
+    #[test]
+    fn floats_are_written_short() {
+        let v = to_value(&S { a: 0.78, b: false }).unwrap();
+        assert_eq!(v.to_string(), r#"{"a":0.78,"b":false}"#);
+        assert_eq!(merge(&S { a: 0.0, b: false }, &v).a, 0.78);
     }
 
     #[test]

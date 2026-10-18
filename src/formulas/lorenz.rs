@@ -257,7 +257,56 @@ impl Lorenz {
     }
 }
 
+/// What a sheet saves of a [`Lorenz`].
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct State {
+    sigma: f64,
+    rho: f64,
+    beta: f64,
+    /// Trajectories side by side, 1 to 3.
+    count: usize,
+    speed: f64,
+    trail: usize,
+    yaw: f32,
+    pitch: f32,
+    spinning: bool,
+    playing: bool,
+}
+
+impl Lorenz {
+    fn state(&self) -> State {
+        State {
+            sigma: self.params.sigma,
+            rho: self.params.rho,
+            beta: self.params.beta,
+            count: self.count,
+            speed: self.speed,
+            trail: self.trail,
+            yaw: self.yaw.rem_euclid(std::f32::consts::TAU),
+            pitch: self.pitch,
+            spinning: self.spinning,
+            playing: self.playing,
+        }
+    }
+
+    fn apply(&mut self, s: State) {
+        self.params.sigma = s.sigma.clamp(0.5, 20.0);
+        self.params.rho = s.rho.clamp(0.5, 60.0);
+        self.params.beta = s.beta.clamp(0.1, 6.0);
+        self.count = s.count.clamp(1, 3);
+        self.speed = s.speed.clamp(0.05, 3.0);
+        self.trail = s.trail.clamp(200, 12000);
+        self.yaw = s.yaw.rem_euclid(std::f32::consts::TAU);
+        self.pitch = s.pitch.clamp(-1.5, 1.5);
+        self.spinning = s.spinning;
+        self.playing = s.playing;
+        self.restart();
+    }
+}
+
 impl Formula for Lorenz {
+    crate::state_hooks!();
+
     fn params(&self) -> Vec<(String, f64)> {
         let p = &self.params;
         vec![

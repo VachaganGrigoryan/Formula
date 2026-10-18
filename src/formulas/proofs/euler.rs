@@ -85,7 +85,33 @@ fn arrow(painter: &egui::Painter, from: Pos2, to: Pos2, stroke: Stroke) {
     ));
 }
 
+/// What a sheet saves of a [`Euler`].
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct State {
+    theta: f64,
+    terms: u32,
+    playing: bool,
+}
+
+impl Euler {
+    fn state(&self) -> State {
+        State {
+            theta: self.theta,
+            terms: self.terms,
+            playing: self.playing,
+        }
+    }
+
+    fn apply(&mut self, s: State) {
+        self.theta = s.theta.clamp(0.0, TAU);
+        self.terms = s.terms.min(30);
+        self.playing = s.playing;
+    }
+}
+
 impl Formula for Euler {
+    crate::state_hooks!();
+
     fn id(&self) -> &'static str {
         "euler-identity"
     }
