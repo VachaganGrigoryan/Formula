@@ -7,6 +7,7 @@
 pub mod bezier;
 pub mod distance;
 pub mod easing;
+pub mod expression;
 pub mod flowfield;
 pub mod force;
 pub mod fourier;
