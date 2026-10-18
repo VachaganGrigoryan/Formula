@@ -180,6 +180,13 @@ pub fn tool(painter: &Painter, rect: Rect, id: &str, color: Color32) {
                 0.5 + 0.4 * (2.0 * a).sin(),
             )
         }),
+        "expression" => {
+            p.line(&[(0.1, 0.55), (0.9, 0.55)]);
+            p.line(&[(0.3, 0.12), (0.3, 0.9)]);
+            p.curve(32, |t| {
+                (0.1 + 0.8 * t, 0.55 - 0.28 * (t * TAU * 1.25).sin())
+            });
+        }
         "force-layout" => {
             let nodes = [
                 (0.2, 0.3),

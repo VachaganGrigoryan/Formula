@@ -258,9 +258,13 @@ impl Lorenz {
 }
 
 impl Formula for Lorenz {
-    fn params(&self) -> Vec<(&'static str, f64)> {
+    fn params(&self) -> Vec<(String, f64)> {
         let p = &self.params;
-        vec![("σ", p.sigma), ("ρ", p.rho), ("β", p.beta)]
+        vec![
+            ("σ".into(), p.sigma),
+            ("ρ".into(), p.rho),
+            ("β".into(), p.beta),
+        ]
     }
 
     fn id(&self) -> &'static str {

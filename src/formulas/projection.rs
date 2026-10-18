@@ -87,8 +87,8 @@ impl Projection {
 }
 
 impl Formula for Projection {
-    fn params(&self) -> Vec<(&'static str, f64)> {
-        vec![("f", self.focal as f64)]
+    fn params(&self) -> Vec<(String, f64)> {
+        vec![("f".into(), self.focal as f64)]
     }
 
     fn id(&self) -> &'static str {

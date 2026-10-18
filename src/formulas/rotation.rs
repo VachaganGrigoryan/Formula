@@ -91,11 +91,11 @@ fn plane(rect: Rect) -> (Pos2, f32) {
 }
 
 impl Formula for Rotation {
-    fn params(&self) -> Vec<(&'static str, f64)> {
+    fn params(&self) -> Vec<(String, f64)> {
         vec![
-            ("θ", self.theta as f64),
-            ("x", self.point[0] as f64),
-            ("y", self.point[1] as f64),
+            ("θ".into(), self.theta as f64),
+            ("x".into(), self.point[0] as f64),
+            ("y".into(), self.point[1] as f64),
         ]
     }
 

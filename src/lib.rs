@@ -8,6 +8,7 @@ pub mod audio;
 pub mod cad;
 pub mod content;
 pub mod draw;
+pub mod expr;
 pub mod formula;
 pub mod formulas;
 pub mod latex;

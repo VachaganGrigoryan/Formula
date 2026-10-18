@@ -204,10 +204,10 @@ impl Formula for Pathfinding {
         }
     }
 
-    fn params(&self) -> Vec<(&'static str, f64)> {
+    fn params(&self) -> Vec<(String, f64)> {
         vec![
-            ("visited", self.player.state.visits as f64),
-            ("path", self.path_steps() as f64),
+            ("visited".into(), self.player.state.visits as f64),
+            ("path".into(), self.path_steps() as f64),
         ]
     }
 

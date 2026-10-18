@@ -256,10 +256,10 @@ impl Formula for SearchTree {
         ]
     }
 
-    fn params(&self) -> Vec<(&'static str, f64)> {
+    fn params(&self) -> Vec<(String, f64)> {
         vec![
-            ("n", self.tree.len() as f64),
-            ("height", Self::tree_height(&self.tree) as f64),
+            ("n".into(), self.tree.len() as f64),
+            ("height".into(), Self::tree_height(&self.tree) as f64),
         ]
     }
 

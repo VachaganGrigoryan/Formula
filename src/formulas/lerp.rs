@@ -65,11 +65,11 @@ impl Lerp {
 }
 
 impl Formula for Lerp {
-    fn params(&self) -> Vec<(&'static str, f64)> {
+    fn params(&self) -> Vec<(String, f64)> {
         vec![
-            ("t", self.t as f64),
-            ("v_0", self.v0 as f64),
-            ("v_1", self.v1 as f64),
+            ("t".into(), self.t as f64),
+            ("v_0".into(), self.v0 as f64),
+            ("v_1".into(), self.v1 as f64),
         ]
     }
 

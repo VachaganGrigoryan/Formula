@@ -34,11 +34,14 @@ pub fn notebook(doc_md: &str, latex: &str, python: &str) -> String {
 }
 
 /// The notebook for tool `id`, with the equations at `formula`'s current
-/// parameter values. `None` if the tool has no docs or Python export.
+/// parameter values and its generated code if it has any. `None` if the tool
+/// has no docs or Python export.
 pub fn for_formula(id: &str, formula: &dyn Formula) -> Option<String> {
     let doc = content::doc(id)?;
-    let python = content::code(id, Lang::Python)?;
-    Some(notebook(doc, &latex_snippet(formula), python))
+    let python = formula
+        .export_code(Lang::Python)
+        .or_else(|| content::code(id, Lang::Python).map(str::to_owned))?;
+    Some(notebook(doc, &latex_snippet(formula), &python))
 }
 
 /// The doc's title and its sections up to (not including) "Intuition".
@@ -176,5 +179,13 @@ mod tests {
             let python = content::code(tool.id, Lang::Python).unwrap();
             assert!(python.contains("plt.show()"), "{}/main.py", tool.id);
         }
+    }
+
+    #[test]
+    fn notebook_carries_the_plotted_expressions() {
+        let plot = crate::formulas::expression::Expression::with_rows(&["y = q x^3"]);
+        let nb = parse(&for_formula("expression", &plot).unwrap());
+        let code = source(&nb["cells"][3]);
+        assert!(code.contains("return q * x ** 3"), "{code}");
     }
 }

@@ -7,6 +7,7 @@
 pub mod bezier;
 pub mod distance;
 pub mod easing;
+pub mod expression;
 pub mod flowfield;
 pub mod force;
 pub mod fourier;
@@ -171,6 +172,13 @@ pub static TOOLS: &[Tool] = &[
         CURVES,
         "LIS",
         new::<lissajous::Lissajous>
+    ),
+    tool!(
+        "expression",
+        "Expression plotter",
+        CURVES,
+        "EXP",
+        new::<expression::Expression>
     ),
     tool!(
         "force-layout",

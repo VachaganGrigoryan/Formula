@@ -1,6 +1,7 @@
 //! The right-hand panel: properties of the selected viewport, the full
 //! reference documentation of its formula, and its exportable code.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use egui::{Color32, Frame, Margin, RichText, ScrollArea, Stroke, TextEdit};
@@ -496,7 +497,8 @@ impl Inspector {
                         }
                     }
                 });
-                let Some(src) = content::code(tool.id, self.lang) else {
+                let lang = self.lang;
+                let Some(src) = code_source(self.context_formula(ws), tool.id, lang) else {
                     hint(ui, chrome, "No code export for this tool yet.");
                     return;
                 };
@@ -509,7 +511,7 @@ impl Inspector {
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
                     if icon_text_button(ui, Icon::Copy, "Copy", chrome).clicked() {
-                        export::copy(ui.ctx(), src);
+                        export::copy(ui.ctx(), &src);
                         self.notice = Some((
                             format!("Copied {} to the clipboard", self.lang.file_name()),
                             now,
@@ -520,7 +522,7 @@ impl Inspector {
                             export::saved_message(export::save(
                                 tool.id,
                                 self.lang.file_name(),
-                                src,
+                                &src,
                             )),
                             now,
                         ));
@@ -584,10 +586,10 @@ impl Inspector {
                     }
                 }
             });
-        let Some(src) = content::code(tool.id, self.lang) else {
+        let lang = self.lang;
+        let Some(src) = code_source(self.context_formula(ws), tool.id, lang) else {
             return;
         };
-        let lang = self.lang;
         let dark = chrome.dark;
         let plain = chrome.text;
         Frame::new()
@@ -608,7 +610,7 @@ impl Inspector {
                                     .font(mono(12.0))
                                     .color(chrome.text_dim.gamma_multiply(0.6)),
                             );
-                            let mut text: &str = src;
+                            let mut text: &str = &src;
                             let mut layouter =
                                 |ui: &egui::Ui, buf: &dyn egui::TextBuffer, _wrap: f32| {
                                     let job =
@@ -722,6 +724,19 @@ fn icon_text_button(ui: &mut egui::Ui, icon: Icon, label: &str, chrome: &Chrome)
     response
 }
 
+/// The code the Code tab shows: what the formula generates for itself (the
+/// expression plotter writes its rows into the file), else the static file.
+pub fn code_source(
+    formula: Option<&dyn Formula>,
+    id: &str,
+    lang: Lang,
+) -> Option<Cow<'static, str>> {
+    formula
+        .and_then(|f| f.export_code(lang))
+        .map(Cow::Owned)
+        .or_else(|| content::code(id, lang).map(Cow::Borrowed))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -756,5 +771,26 @@ mod tests {
         assert!(inspector.context_formula(&ws).is_none());
         inspector.tool = formulas::tool("mandelbrot");
         assert_eq!(inspector.context_formula(&ws).unwrap().id(), "mandelbrot");
+    }
+
+    #[test]
+    fn code_source_prefers_generated_code() {
+        use crate::formulas::expression::Expression;
+        let plot = Expression::with_rows(&["y = q x^3"]);
+        let generated = code_source(Some(&plot), "expression", Lang::Python).unwrap();
+        assert!(generated.contains("return q * x ** 3"), "{generated}");
+        let lissajous = formulas::registry()
+            .into_iter()
+            .find(|f| f.id() == "lissajous")
+            .unwrap();
+        assert_eq!(
+            code_source(Some(&*lissajous), "lissajous", Lang::Rust).as_deref(),
+            content::code("lissajous", Lang::Rust)
+        );
+        assert_eq!(
+            code_source(None, "expression", Lang::TypeScript).as_deref(),
+            content::code("expression", Lang::TypeScript)
+        );
+        assert!(code_source(None, "no-such-tool", Lang::Python).is_none());
     }
 }

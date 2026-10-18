@@ -54,13 +54,13 @@ impl Lissajous {
 }
 
 impl Formula for Lissajous {
-    fn params(&self) -> Vec<(&'static str, f64)> {
+    fn params(&self) -> Vec<(String, f64)> {
         vec![
-            ("A", self.amp_x),
-            ("B", self.amp_y),
-            ("a", self.a as f64),
-            ("b", self.b as f64),
-            ("δ", self.delta),
+            ("A".into(), self.amp_x),
+            ("B".into(), self.amp_y),
+            ("a".into(), self.a as f64),
+            ("b".into(), self.b as f64),
+            ("δ".into(), self.delta),
         ]
     }
 

@@ -283,9 +283,12 @@ impl Formula for SpanningTree {
         ]
     }
 
-    fn params(&self) -> Vec<(&'static str, f64)> {
+    fn params(&self) -> Vec<(String, f64)> {
         let s = &self.player.state;
-        vec![("weight", s.weight as f64), ("edges", s.accepted as f64)]
+        vec![
+            ("weight".into(), s.weight as f64),
+            ("edges".into(), s.accepted as f64),
+        ]
     }
 
     fn stage_height(&self, width: f32) -> f32 {
