@@ -174,6 +174,13 @@ pub static TOOLS: &[Tool] = &[
         new::<lissajous::Lissajous>
     ),
     tool!(
+        "expression",
+        "Expression plotter",
+        CURVES,
+        "EXP",
+        new::<expression::Expression>
+    ),
+    tool!(
         "force-layout",
         "Springs and repulsion",
         PHYSICS,
