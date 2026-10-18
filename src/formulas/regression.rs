@@ -2,6 +2,7 @@
 
 use egui::{Align2, FontId, Pos2, Rect, Sense, Shape, Stroke, pos2, vec2};
 
+use crate::derive::{Derivation, Step};
 use crate::draw;
 use crate::formula::{Formula, MathText, Palette, Tone, fit_text};
 use crate::rng::Rng;
@@ -125,6 +126,86 @@ fn to_data(plot: Rect, p: Pos2) -> Point {
 }
 
 impl Formula for Regression {
+    fn derivations(&self) -> Vec<Derivation> {
+        let m = MathText::new;
+        vec![Derivation::new(
+            "Least squares",
+            vec![
+                Step::new(
+                    m().t("E(m, b) = Σ (y")
+                        .sub("i")
+                        .t(" − (m x")
+                        .sub("i")
+                        .t(" + b))")
+                        .sup("2"),
+                    "Add up the squared vertical misses of the line y = m x + b over all n points.",
+                ),
+                Step::new(
+                    m().t("dE/db = −2 Σ (y")
+                        .sub("i")
+                        .t(" − m x")
+                        .sub("i")
+                        .t(" − b) = 0"),
+                    "At the minimum, nudging b does not change E.",
+                ),
+                Step::new(
+                    m().t("b")
+                        .tone(Tone::Trace)
+                        .t(" = μ")
+                        .sub("y")
+                        .t(" − m μ")
+                        .sub("x"),
+                    "Divide by n: the y values sum to n μ_y and the x values to n μ_x. The line passes through the mean point.",
+                ),
+                Step::new(
+                    m().t("dE/dm = −2 Σ x")
+                        .sub("i")
+                        .t(" (y")
+                        .sub("i")
+                        .t(" − m x")
+                        .sub("i")
+                        .t(" − b) = 0"),
+                    "Nudging the slope does not change E either.",
+                ),
+                Step::new(
+                    m().t("Σ x")
+                        .sub("i")
+                        .t(" (y")
+                        .sub("i")
+                        .t(" − μ")
+                        .sub("y")
+                        .t(") = m Σ x")
+                        .sub("i")
+                        .t(" (x")
+                        .sub("i")
+                        .t(" − μ")
+                        .sub("x")
+                        .t(")"),
+                    "Substitute b and collect the terms with m.",
+                ),
+                Step::new(
+                    m().t("m")
+                        .tone(Tone::Trace)
+                        .t(" = Σ (x")
+                        .sub("i")
+                        .t(" − μ")
+                        .sub("x")
+                        .t(")(y")
+                        .sub("i")
+                        .t(" − μ")
+                        .sub("y")
+                        .t(") / Σ (x")
+                        .sub("i")
+                        .t(" − μ")
+                        .sub("x")
+                        .t(")")
+                        .sup("2"),
+                    "Replacing the leading x_i by x_i − μ_x changes neither sum, because the deviations from a mean add up to zero.",
+                ),
+            ],
+        )]
+    }
+
     fn id(&self) -> &'static str {
         "linear-regression"
     }

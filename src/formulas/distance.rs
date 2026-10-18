@@ -3,7 +3,7 @@
 
 use egui::{Align2, Color32, FontId, Pos2, Rect, Sense, Stroke, pos2, vec2};
 
-use crate::derive::Substitution;
+use crate::derive::{Derivation, Step, Substitution};
 use crate::draw::lerp_color;
 use crate::formula::{Formula, MathText, Palette, Tone};
 use crate::rng::Rng;
@@ -184,6 +184,75 @@ fn cluster_colors(p: &Palette) -> [Color32; 6] {
 }
 
 impl Formula for Distance {
+    fn derivations(&self) -> Vec<Derivation> {
+        let m = MathText::new;
+        vec![Derivation::new(
+            "From Pythagoras",
+            vec![
+                Step::new(
+                    m().t("Δx")
+                        .tone(Tone::X)
+                        .t(" = x")
+                        .sub("2")
+                        .t(" − x")
+                        .sub("1"),
+                    "The horizontal leg of the right triangle between the two points.",
+                ),
+                Step::new(
+                    m().t("Δy")
+                        .tone(Tone::Y)
+                        .t(" = y")
+                        .sub("2")
+                        .t(" − y")
+                        .sub("1"),
+                    "The vertical leg.",
+                ),
+                Step::new(
+                    m().t("a").sup("2").t(" + b").sup("2").t(" = c").sup("2"),
+                    "Pythagoras: the squares on the legs of a right triangle add up to the square on the hypotenuse.",
+                ),
+                Step::new(
+                    m().t("d")
+                        .tone(Tone::Trace)
+                        .sup("2")
+                        .t(" = Δx")
+                        .sup("2")
+                        .t(" + Δy")
+                        .sup("2"),
+                    "Here the legs are Δx and Δy and the hypotenuse is the distance d.",
+                ),
+                Step::new(
+                    m().t("d")
+                        .tone(Tone::Trace)
+                        .t(" = √(Δx")
+                        .sup("2")
+                        .t(" + Δy")
+                        .sup("2")
+                        .t(")"),
+                    "Take the positive square root: a distance is never negative.",
+                ),
+                Step::new(
+                    m().t("d")
+                        .tone(Tone::Trace)
+                        .t(" = √((x")
+                        .sub("2")
+                        .t(" − x")
+                        .sub("1")
+                        .t(")")
+                        .sup("2")
+                        .t(" + (y")
+                        .sub("2")
+                        .t(" − y")
+                        .sub("1")
+                        .t(")")
+                        .sup("2")
+                        .t(")"),
+                    "Write the legs out in coordinates. In n dimensions the sum just gets more terms.",
+                ),
+            ],
+        )]
+    }
+
     fn substitutions(&self) -> Vec<Substitution> {
         let Some((i, _)) = nearest(&self.points, self.probe) else {
             return Vec::new();

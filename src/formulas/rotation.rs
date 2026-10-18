@@ -5,7 +5,7 @@ use std::f32::consts::PI;
 use egui::epaint::TextShape;
 use egui::{Align2, FontId, Pos2, Rect, Sense, Shape, Stroke, pos2, vec2};
 
-use crate::derive::Substitution;
+use crate::derive::{Derivation, Step, Substitution};
 use crate::draw;
 use crate::formula::{Formula, MathText, Palette, Tone};
 
@@ -92,6 +92,50 @@ fn plane(rect: Rect) -> (Pos2, f32) {
 }
 
 impl Formula for Rotation {
+    fn derivations(&self) -> Vec<Derivation> {
+        let m = MathText::new;
+        vec![Derivation::new(
+            "From the angle-addition identities",
+            vec![
+                Step::new(
+                    m().t("x = r cos α,   y = r sin α"),
+                    "Write the point in polar form: distance r from the origin at angle α.",
+                ),
+                Step::new(
+                    m().t("x'")
+                        .tone(Tone::X)
+                        .t(" = r cos(α + θ),   ")
+                        .t("y'")
+                        .tone(Tone::Y)
+                        .t(" = r sin(α + θ)"),
+                    "Rotating about the origin keeps r and adds θ to the angle.",
+                ),
+                Step::new(
+                    m().t("cos(α + θ) = cos α cos θ − sin α sin θ"),
+                    "The angle-addition identity for cosine.",
+                ),
+                Step::new(
+                    m().t("sin(α + θ) = sin α cos θ + cos α sin θ"),
+                    "And the one for sine.",
+                ),
+                Step::new(
+                    m().t("x'")
+                        .tone(Tone::X)
+                        .t(" = (r cos α) cos θ − (r sin α) sin θ"),
+                    "Expand x' with the cosine identity.",
+                ),
+                Step::new(
+                    m().t("x'").tone(Tone::X).t(" = x cos θ − y sin θ"),
+                    "r cos α is x and r sin α is y.",
+                ),
+                Step::new(
+                    m().t("y'").tone(Tone::Y).t(" = x sin θ + y cos θ"),
+                    "The same with the sine identity. The four coefficients are the rotation matrix.",
+                ),
+            ],
+        )]
+    }
+
     fn substitutions(&self) -> Vec<Substitution> {
         let values = [
             ("θ", self.theta as f64),
