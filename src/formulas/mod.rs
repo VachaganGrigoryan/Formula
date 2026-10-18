@@ -470,7 +470,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "the session tools save their state in the next commit"]
     fn every_tool_saves_state() {
         let saving: Vec<&str> = saved_states().iter().map(|(t, _)| t.id).collect();
         let missing: Vec<&str> = TOOLS

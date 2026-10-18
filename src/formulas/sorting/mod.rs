@@ -499,7 +499,33 @@ fn slot_x(area: Rect, n: usize, i: f32) -> f32 {
     area.left() + area.width() / n.max(1) as f32 * i
 }
 
+/// What a sheet saves of a [`SortVisualizer`].
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct Saved {
+    /// Steps per second.
+    speed: f32,
+    playing: bool,
+}
+
+impl SortVisualizer {
+    fn state(&self) -> Saved {
+        Saved {
+            speed: self.player.speed,
+            playing: self.player.playing,
+        }
+    }
+
+    fn apply(&mut self, s: Saved) {
+        // Record first, so the recording's own pace does not replace the speed.
+        self.sync();
+        self.player.speed = s.speed.clamp(1.0, 5000.0);
+        self.player.playing = s.playing;
+    }
+}
+
 impl Formula for SortVisualizer {
+    crate::state_hooks!();
+
     fn id(&self) -> &'static str {
         self.info.id
     }

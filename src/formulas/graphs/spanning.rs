@@ -234,7 +234,36 @@ impl SpanningTree {
     }
 }
 
+/// What a sheet saves of a [`SpanningTree`].
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct State {
+    /// The point count "New points" uses.
+    n: usize,
+    /// Steps per second.
+    speed: f32,
+    playing: bool,
+}
+
+impl SpanningTree {
+    fn state(&self) -> State {
+        State {
+            n: self.n,
+            speed: self.player.speed,
+            playing: self.player.playing,
+        }
+    }
+
+    fn apply(&mut self, s: State) {
+        self.sync();
+        self.n = s.n.clamp(6, 24);
+        self.player.speed = s.speed.clamp(1.0, 60.0);
+        self.player.playing = s.playing;
+    }
+}
+
 impl Formula for SpanningTree {
+    crate::state_hooks!();
+
     fn id(&self) -> &'static str {
         self.alg.id()
     }

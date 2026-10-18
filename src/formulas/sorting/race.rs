@@ -127,7 +127,51 @@ fn ordinal(n: usize) -> String {
     format!("{n}{suffix}")
 }
 
+/// What a sheet saves of a [`Race`].
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct Saved {
+    /// The racing algorithms, by name.
+    chosen: Vec<String>,
+    /// Steps per second, the same for every lane.
+    speed: f32,
+    running: bool,
+}
+
+impl Race {
+    fn state(&self) -> Saved {
+        Saved {
+            chosen: self
+                .chosen
+                .iter()
+                .filter_map(|a| serde_json::to_value(a).ok()?.as_str().map(str::to_owned))
+                .collect(),
+            speed: self.speed,
+            running: self.running,
+        }
+    }
+
+    fn apply(&mut self, s: Saved) {
+        let mut chosen: Vec<Algorithm> = Vec::new();
+        for name in &s.chosen {
+            if let Ok(alg) = serde_json::from_value::<Algorithm>(serde_json::json!(name))
+                && !chosen.contains(&alg)
+            {
+                chosen.push(alg);
+            }
+        }
+        if !chosen.is_empty() {
+            self.chosen = chosen;
+        }
+        // Build the lanes first, so their own pacing does not replace the speed.
+        self.sync();
+        self.speed = s.speed.clamp(1.0, 5000.0);
+        self.running = s.running;
+    }
+}
+
 impl Formula for Race {
+    crate::state_hooks!();
+
     fn id(&self) -> &'static str {
         "sorting-race"
     }
@@ -464,6 +508,16 @@ impl Formula for Race {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unknown_algorithms_are_skipped() {
+        let mut race = Race::new(Session::new());
+        race.load_state(&serde_json::json!({"chosen": ["bubble", "nope", "bubble"]}));
+        assert_eq!(race.chosen, [Algorithm::Bubble]);
+        assert_eq!(race.lanes.len(), 1);
+        race.load_state(&serde_json::json!({"chosen": ["nope"]}));
+        assert_eq!(race.chosen, [Algorithm::Bubble]);
+    }
 
     #[test]
     fn places_follow_step_counts() {
