@@ -327,6 +327,13 @@ pub static TOOLS: &[Tool] = &[
         "PYT",
         new::<proofs::pythagoras::Pythagoras>
     ),
+    tool!(
+        "euler-identity",
+        "Euler's formula",
+        PROOFS,
+        "EUL",
+        new::<proofs::euler::Euler>
+    ),
 ];
 
 /// The tool with this id.

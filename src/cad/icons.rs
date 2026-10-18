@@ -202,6 +202,18 @@ pub fn tool(painter: &Painter, rect: Rect, id: &str, color: Color32) {
             p.closed(&[(0.1, 0.1), (0.9, 0.1), (0.9, 0.9), (0.1, 0.9)]);
             p.closed(&[(0.42, 0.1), (0.9, 0.42), (0.58, 0.9), (0.1, 0.58)]);
         }
+        "euler-identity" => {
+            p.circle(0.5, 0.5, 0.36);
+            // A few partial sums spiralling in to the point on the circle.
+            p.line(&[
+                (0.5, 0.5),
+                (0.86, 0.5),
+                (0.86, 0.14),
+                (0.4, 0.14),
+                (0.3, 0.3),
+            ]);
+            p.dot(0.3, 0.3, 0.05);
+        }
         "force-layout" => {
             let nodes = [
                 (0.2, 0.3),
