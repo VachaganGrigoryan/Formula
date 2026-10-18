@@ -143,7 +143,7 @@ impl Formula for Quadratic {
 
     fn derivations(&self) -> Vec<Derivation> {
         let m = MathText::new;
-        let half = || m().t("(b / 2a)").sup("2");
+        let half = || m().t("(b / 2a)").tone(Tone::Y).sup("2").tone(Tone::Y);
         vec![Derivation::new(
             "Completing the square",
             vec![
@@ -163,9 +163,9 @@ impl Formula for Quadratic {
                     m().t("x")
                         .sup("2")
                         .t(" + (b / a) x + ")
-                        .append(half().tone(Tone::Y))
+                        .append(half())
                         .t(" = ")
-                        .append(half().tone(Tone::Y))
+                        .append(half())
                         .t(" − c / a"),
                     "Add the square of half the x coefficient to both sides.",
                 ),

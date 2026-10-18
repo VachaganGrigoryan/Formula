@@ -40,6 +40,9 @@ Formulas included, grouped as in the tool library:
 | Graphs & Trees | Breadth-first, depth-first, Dijkstra and A* search `dist(n) = dist(u) + 1` | draw walls and mud on a shared grid, drag the start and goal, mazes and random walls; play, step and scrub through every frontier, visit and path step |
 | | Binary search tree (AVL: balance factor within 1) | insert, delete and find a key; random trees; toggle AVL balancing; in-, pre- and post-order walks; every comparison and rotation is a frame you can play, step and scrub, and rotations glide the nodes into place |
 | | Kruskal's and Prim's minimum spanning trees `minimize Σ w(e) over the n − 1 tree edges` | one shared graph of 6 to 24 random points with Delaunay edges; drag points to move them; edges turn considering, accepted or rejected as the run replays; Kruskal colors vertices by tree; both list the edges still waiting by weight; play, step and scrub |
+| Proofs & Derivations | Quadratic formula `x = (−b ± √(b² − 4ac)) / 2a` | a, b, c sliders; the parabola with its roots, vertex and axis of symmetry; a caption for each discriminant case; derived by completing the square |
+| | Pythagorean theorem `a² + b² = c²` | four triangles slide around an (a + b)² square from c² to a² + b²; or the altitude splits the triangle into two similar copies |
+| | Euler's formula `e^(iθ) = cos θ + i sin θ` | the Taylor series drawn as arrows head to tail, spiralling in to the unit circle; a θ = π button for e^(iπ) + 1 = 0 |
 
 In the browser, `#id` in the URL (e.g. `index.html#mandelbrot`) brings that formula into view,
 placing it first if needed.
@@ -51,8 +54,8 @@ placing it first if needed.
 | Toolbar | Select (V) and Pan (H), undo/redo, zoom; one button per category with a menu of its tools |
 | Browser (left) | Tool library (click to place, double-click to place beside the drawing) and the list of viewports with show/hide and lock |
 | Canvas | Infinite drafting plane with an adaptive grid, origin axes, rulers, crosshair, navigator (with zoom, fit and 1:1 buttons) and title block |
-| Inspector (right) | **Properties**: name, X/Y/W/H, lock, the equations and the formula's controls. **Docs**: the full reference. **Code**: Python, TypeScript and Rust, with Copy and Download (Save on desktop), plus **LaTeX** (the equations with the viewport's current values) and a Jupyter **Notebook** (`.ipynb`). The maximize button widens it for reading |
-| Command line | Type a tool alias (`LOR`, `BEZ`, `MAN`, `VOR`, …) or name to place it, or a command: `fit`, `zoom 150`, `del`, `dup`, `undo`, `redo`, `grid`, `snap`, `ortho`, `latex` (copy the selection's equations as LaTeX), `ipynb` (export it as a notebook), `plot <expression>` (place an expression plotter, e.g. `plot r = 1 + cos(3θ)`), `help` |
+| Inspector (right) | **Properties**: name, X/Y/W/H, lock, the equations and the formula's controls. **Docs**: the full reference. **Derive**: the formula explained step by step: Prev / Next reveal one step at a time, "Plug in current values" works the equations out with the viewport's numbers one operation per step (distance, lerp, polar, rotation, luminance, normalization, easing and the proof tools), and authored derivations explain where the equations come from. **Code**: Python, TypeScript and Rust, with Copy and Download (Save on desktop), plus **LaTeX** (the equations with the viewport's current values) and a Jupyter **Notebook** (`.ipynb`). The maximize button widens it for reading |
+| Command line | Type a tool alias (`LOR`, `BEZ`, `MAN`, `VOR`, …) or name to place it, or a command: `fit`, `zoom 150`, `del`, `dup`, `undo`, `redo`, `grid`, `snap`, `ortho`, `latex` (copy the selection's equations as LaTeX), `ipynb` (export it as a notebook), `plot <expression>` (place an expression plotter, e.g. `plot r = 1 + cos(3θ)`), `derive` (open the Derive tab), `help` |
 | Status bar | Pointer coordinates, current tool, SNAP / GRID / ORTHO toggles, zoom, viewport count, fps |
 
 Working with viewports:
@@ -135,6 +138,7 @@ src/
   draw.rs            drawing helpers: polygon fill, lerp/gradients, draggable handles
   rng.rs             small seeded random number generator
   expr/              expression engine (UI-free): lexer, Pratt parser, eval, math and code printers
+  derive.rs          derivation steps, and plugging values into an expression one operation at a time
   audio.rs           tones: Web Audio in the browser, cpal on desktop (feature native-audio)
   formulas/
     mod.rs           the tool catalogue (`TOOLS`), category names, glyph-coverage test
@@ -145,6 +149,7 @@ src/
                      skin.rs (bars / radial / spectrum / dots), race.rs, mod.rs (player and view)
     fourier/         epicycles: math.rs (UI-free), animals.rs, mod.rs (view)
     expression/      plotter: plot.rs (view and sampling, UI-free), export.rs (code generation), mod.rs
+    proofs/          quadratic.rs, pythagoras.rs, euler.rs (math in plain functions with tests)
 assets/animals.json  animal outlines
 assets/content/<id>/ doc.md, main.py, main.ts, main.rs for every tool
 build.rs             embeds assets/content
