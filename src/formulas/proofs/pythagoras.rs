@@ -208,13 +208,25 @@ impl Pythagoras {
             );
         };
         let mid = |u: Pos2, v: Pos2| u + (v - u) * 0.5;
-        label(
-            mid(pa, pc) + vec2(-14.0, -6.0),
+        // Leg labels sit outside the triangle, away from its center.
+        let centroid = pa + ((pb - pa) + (pc - pa)) / 3.0;
+        let outside = |u: Pos2, v: Pos2| {
+            let m = mid(u, v);
+            m + (m - centroid).normalized() * 12.0
+        };
+        // Aligned so the text grows away from the triangle.
+        let leg = |pos: Pos2, align: Align2, text: String, color: Color32| {
+            painter.text(pos, align, text, FontId::proportional(15.0), color);
+        };
+        leg(
+            outside(pa, pc),
+            Align2::RIGHT_CENTER,
             format!("a = {:.2}", self.a),
             palette.x,
         );
-        label(
-            mid(pb, pc) + vec2(16.0, -6.0),
+        leg(
+            outside(pb, pc),
+            Align2::LEFT_CENTER,
             format!("b = {:.2}", self.b),
             palette.y,
         );
