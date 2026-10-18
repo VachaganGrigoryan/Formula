@@ -115,11 +115,16 @@ impl Board {
         self.viewports.iter_mut().find(|v| v.uid == uid)
     }
 
-    /// A fresh copy of a viewport's tool, at the same size, offset down-right.
+    /// A copy of a viewport with the same settings, at the same size, offset
+    /// down-right.
     pub fn duplicate(&mut self, uid: u64, now: f64) -> Option<u64> {
         let vp = self.get(uid)?;
-        let (tool, rect) = (vp.tool, vp.rect);
-        Some(self.add(tool, rect.min + vec2(40.0, 40.0), rect.size(), now))
+        let (tool, rect, state) = (vp.tool, vp.rect, vp.formula.save_state());
+        let copy = self.add(tool, rect.min + vec2(40.0, 40.0), rect.size(), now);
+        if let (Some(state), Some(vp)) = (state, self.get_mut(copy)) {
+            vp.formula.load_state(&state);
+        }
+        Some(copy)
     }
 
     pub fn bring_to_front(&mut self, uid: u64) {
@@ -422,13 +427,20 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_is_a_fresh_instance_nearby() {
+    fn duplicate_copies_settings_nearby() {
         let mut b = Board::default();
-        let a = b.add(tool("voronoi"), pos2(10.0, 20.0), vec2(500.0, 300.0), 0.0);
+        let a = b.add(tool("lissajous"), pos2(10.0, 20.0), vec2(500.0, 300.0), 0.0);
+        b.get_mut(a)
+            .unwrap()
+            .formula
+            .load_state(&serde_json::json!({"a": 7}));
         let d = b.duplicate(a, 1.0).unwrap();
         let (ra, rd) = (b.get(a).unwrap().rect, b.get(d).unwrap().rect);
         assert_eq!(ra.size(), rd.size());
         assert_eq!(rd.min, ra.min + vec2(40.0, 40.0));
+        let copy = b.get(d).unwrap().formula.save_state().unwrap();
+        assert_eq!(copy["a"], 7);
+        assert_eq!(Some(copy), b.get(a).unwrap().formula.save_state());
     }
 
     #[test]

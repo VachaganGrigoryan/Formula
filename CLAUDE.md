@@ -88,7 +88,9 @@ nothing changes. On a format change, bump `fwb::VERSION` and convert old documen
 `sheet::migrate`. `cad/files.rs` holds the current path, the unsaved mark (`change_key`: the sheet
 text without camera and UI, checked twice a second), the Recent list and the `rfd` dialogs.
 `Workspace::open_text` replaces the board as one undo step (shared data changes in place); commands
-cannot show dialogs, so they set `Workspace::file_request` and the app runs it. The example sheets
+cannot show dialogs, so they set `Workspace::file_request` and the app runs it. The browser has no
+save dialog, so on wasm Save As opens `chrome::save_as_window` (via `Workspace::save_prompt`) to ask
+for the download's name. `Board::duplicate` copies the formula's state. The example sheets
 in `assets/sheets/` are embedded by `build.rs` (`sheet::SHEETS`) and must open with no warnings.
 
 **Exports.**

@@ -843,6 +843,51 @@ fn toggle(ui: &mut egui::Ui, label: &str, on: bool, chrome: &Chrome) -> egui::Re
     r
 }
 
+/// The browser's Save As: it has no save dialog, so ask for the file name
+/// here, then download the sheet under it.
+pub fn save_as_window(ctx: &egui::Context, ws: &mut Workspace, chrome: &Chrome) {
+    let Some(mut name) = ws.save_prompt.take() else {
+        return;
+    };
+    let (mut keep, mut submit) = (true, false);
+    egui::Window::new("Save sheet as")
+        .collapsible(false)
+        .resizable(false)
+        .anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, 120.0))
+        .show(ctx, |ui| {
+            let edit = ui.add(
+                TextEdit::singleline(&mut name)
+                    .hint_text("name.fwb")
+                    .desired_width(260.0),
+            );
+            if !edit.has_focus() && !edit.lost_focus() {
+                edit.request_focus();
+            }
+            let (enter, escape) =
+                ui.input(|i| (i.key_pressed(Key::Enter), i.key_pressed(Key::Escape)));
+            let valid = super::files::download_name(&name);
+            if valid.is_none() {
+                ui.label(RichText::new("Type a name").color(chrome.dimension));
+            }
+            ui.horizontal(|ui| {
+                let download = ui
+                    .add_enabled(valid.is_some(), egui::Button::new("Download"))
+                    .clicked();
+                submit = valid.is_some() && (download || (edit.lost_focus() && enter));
+                if ui.button("Cancel").clicked() || escape {
+                    keep = false;
+                }
+            });
+        });
+    match super::files::download_name(&name) {
+        Some(file) if submit => {
+            ws.save_to(&file);
+        }
+        _ if keep => ws.save_prompt = Some(name),
+        _ => {}
+    }
+}
+
 /// The keyboard and mouse reference.
 pub fn help_window(ctx: &egui::Context, p: &mut Panels, chrome: &Chrome) {
     egui::Window::new("Keyboard and mouse")
@@ -892,6 +937,36 @@ pub fn help_window(ctx: &egui::Context, p: &mut Panels, chrome: &Chrome) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_save_as_window_stays_until_cancelled() {
+        use super::super::{board::Board, camera::Camera, canvas::Settings};
+        let mut ws = Workspace::new(Board::default(), Camera::default(), Settings::default());
+        let ctx = egui::Context::default();
+        let chrome = Chrome::graphite();
+        let frame = |ws: &mut Workspace, events: Vec<egui::Event>| {
+            let input = egui::RawInput {
+                events,
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(input, |ui| save_as_window(ui.ctx(), ws, &chrome));
+            out.textures_delta.clear();
+        };
+        ws.save_prompt = Some("lesson".into());
+        frame(&mut ws, Vec::new());
+        frame(&mut ws, Vec::new());
+        assert_eq!(ws.save_prompt.as_deref(), Some("lesson"));
+        let escape = egui::Event::Key {
+            key: Key::Escape,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        };
+        frame(&mut ws, vec![escape]);
+        assert_eq!(ws.save_prompt, None);
+        assert!(ws.files.path.is_none(), "cancelling saves nothing");
+    }
 
     /// A category without a short name shows up as "Other" in the toolbar.
     #[test]
