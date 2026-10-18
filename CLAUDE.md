@@ -76,6 +76,17 @@ camera, settings, theme, panel visibility, and the inspector tab/lang. A formula
 - Commands can't reach egui, so they put text in `Workspace::clipboard`, which the canvas copies on
   the next frame.
 
+**Expressions.** `src/expr/` is the in-repo expression engine (no crate): a lexer, a Pratt parser
+with a depth cap of 256, `eval`, `print` (canonical text that re-parses to the same tree),
+`to_math` (a `MathText` for the Inspector and LaTeX) and `to_code` (numpy / TypeScript / Rust).
+Letters are single-letter variables (`ab` = a·b, `k_r` is one subscripted name), except for
+function names, Greek names (`theta` → `θ`) and the constants `pi` and `e`. The `expression` tool
+uses it. Its content files are templates whose `@PARAMS` / `@EXPRESSIONS` regions
+`Formula::export_code` regenerates, and the Code tab and the notebook prefer `export_code` over
+the static file. A test keeps the static files equal to the default instance's export. The
+`plot <expr>` command places a plotter through `Formula::load_state`. `save_state` / `load_state`
+are no-ops for every other tool until sheet files arrive.
+
 **Embedded content.** `build.rs` scans `assets/content/<tool-id>/` and generates
 `$OUT_DIR/content.rs` with an `include_str!` for each `doc.md`, `main.py`, `main.ts`, `main.rs`.
 `src/content.rs` serves it. Adding content needs no code change.

@@ -21,6 +21,7 @@ Formulas included, grouped as in the tool library:
 | | Cubic Bézier curve | drag control points; de Casteljau construction and Bernstein weights |
 | | Drawn by circles (Fourier epicycles) | 64 animal silhouettes traced by up to 200 circles |
 | | Lissajous figures `x = A sin(at + δπ), y = B sin(bt)` | amplitude, frequency and phase sliders; δ drifts so the figure morphs |
+| | Expression plotter: type `y = a sin(bx)`, `r = 1 + cos(3θ)` or `(cos t, sin t)` | up to six rows, a slider for every free letter, breaks at asymptotes, drag to pan and scroll to zoom; the code export contains your expressions |
 | Physics & Network Layouts | Springs and repulsion: Hooke `Fs = −k(d − x0)` + Coulomb `Fr = kr/d²` | drag nodes; force arrows on hover |
 | Data Scaling & Normalization | Min-max normalization | outlier slider, per-bar calculation on hover |
 | Fractals & Generative Patterns | Mandelbrot set `z(n+1) = z(n)² + c` | click/right-click to zoom, drag to pan, orbit on hover |
@@ -51,7 +52,7 @@ placing it first if needed.
 | Browser (left) | Tool library (click to place, double-click to place beside the drawing) and the list of viewports with show/hide and lock |
 | Canvas | Infinite drafting plane with an adaptive grid, origin axes, rulers, crosshair, navigator (with zoom, fit and 1:1 buttons) and title block |
 | Inspector (right) | **Properties**: name, X/Y/W/H, lock, the equations and the formula's controls. **Docs**: the full reference. **Code**: Python, TypeScript and Rust, with Copy and Download (Save on desktop), plus **LaTeX** (the equations with the viewport's current values) and a Jupyter **Notebook** (`.ipynb`). The maximize button widens it for reading |
-| Command line | Type a tool alias (`LOR`, `BEZ`, `MAN`, `VOR`, …) or name to place it, or a command: `fit`, `zoom 150`, `del`, `dup`, `undo`, `redo`, `grid`, `snap`, `ortho`, `latex` (copy the selection's equations as LaTeX), `ipynb` (export it as a notebook), `help` |
+| Command line | Type a tool alias (`LOR`, `BEZ`, `MAN`, `VOR`, …) or name to place it, or a command: `fit`, `zoom 150`, `del`, `dup`, `undo`, `redo`, `grid`, `snap`, `ortho`, `latex` (copy the selection's equations as LaTeX), `ipynb` (export it as a notebook), `plot <expression>` (place an expression plotter, e.g. `plot r = 1 + cos(3θ)`), `help` |
 | Status bar | Pointer coordinates, current tool, SNAP / GRID / ORTHO toggles, zoom, viewport count, fps |
 
 Working with viewports:
@@ -133,6 +134,7 @@ src/
   formula.rs         the `Formula` trait, `Palette`, `MathText` equation builder
   draw.rs            drawing helpers: polygon fill, lerp/gradients, draggable handles
   rng.rs             small seeded random number generator
+  expr/              expression engine (UI-free): lexer, Pratt parser, eval, math and code printers
   audio.rs           tones: Web Audio in the browser, cpal on desktop (feature native-audio)
   formulas/
     mod.rs           the tool catalogue (`TOOLS`), category names, glyph-coverage test
@@ -142,6 +144,7 @@ src/
     sorting/         algorithms.rs (records every step, UI-free), data.rs (shared list),
                      skin.rs (bars / radial / spectrum / dots), race.rs, mod.rs (player and view)
     fourier/         epicycles: math.rs (UI-free), animals.rs, mod.rs (view)
+    expression/      plotter: plot.rs (view and sampling, UI-free), export.rs (code generation), mod.rs
 assets/animals.json  animal outlines
 assets/content/<id>/ doc.md, main.py, main.ts, main.rs for every tool
 build.rs             embeds assets/content

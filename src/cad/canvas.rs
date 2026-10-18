@@ -20,6 +20,7 @@ use super::icons;
 use super::overlay;
 use super::theme::Chrome;
 use super::{export, notebook};
+use crate::expr;
 use crate::formula::Palette;
 use crate::formulas::{self, Tool};
 use crate::latex;
@@ -426,13 +427,19 @@ impl Workspace {
             "code" => self.request = Some(Request::Code),
             "latex" | "tex" => self.copy_latex(),
             "ipynb" | "notebook" => self.save_notebook(),
+            "plot" => {
+                let src = line
+                    .split_once(char::is_whitespace)
+                    .map_or("", |(_, rest)| rest.trim());
+                return self.plot(src);
+            }
             "clear" => {
                 self.board.selection = self.board.viewports.iter().map(|v| v.uid).collect();
                 self.delete_selection();
             }
             "help" | "?" => {
                 self.say("Tools: type an alias (LOR, BEZ, MAN, VOR, LIF, BUB ...) or a tool name to place it.");
-                self.say("Commands: fit, focus, zoom <pct>, del, dup, undo, redo, all, grid, snap, ortho, pan, select, docs, code, latex, ipynb, clear.");
+                self.say("Commands: fit, focus, zoom <pct>, del, dup, undo, redo, all, grid, snap, ortho, pan, select, docs, code, latex, ipynb, plot <expr>, clear.");
             }
             _ => {
                 // A tool: by alias, id or name. "place lorenz" works too.
@@ -451,6 +458,28 @@ impl Workspace {
                     }
                 }
             }
+        }
+        true
+    }
+
+    /// Place an expression plotter showing `src`, e.g. `r = 1 + cos(3θ)`. A
+    /// typo is reported with its column and nothing is placed.
+    fn plot(&mut self, src: &str) -> bool {
+        if src.is_empty() {
+            self.say("plot <expression>, e.g. plot r = 1 + cos(3θ)");
+            return true;
+        }
+        if let Err(e) = expr::parse(src) {
+            let column = src[..e.span.start.min(src.len())].chars().count() + 1;
+            self.say(format!("plot: {} at column {column}", e.message));
+            return false;
+        }
+        let Some(tool) = formulas::tool("expression") else {
+            return false;
+        };
+        let uid = self.place(tool, None, Vec2::ZERO);
+        if let Some(vp) = self.board.get_mut(uid) {
+            vp.formula.load_state(&serde_json::json!({ "rows": [src] }));
         }
         true
     }
@@ -1510,6 +1539,36 @@ mod tests {
         assert_eq!(ws.board.viewports.len(), 2);
         assert!(!ws.run_command("frobnicate"));
         assert!(ws.run_command("zoom 50"));
+    }
+
+    #[test]
+    fn plot_command_places_an_expression() {
+        let mut ws = workspace();
+        let rows = |ws: &Workspace, i: usize| {
+            ws.board.viewports[i].formula.save_state().unwrap()["rows"].clone()
+        };
+        assert!(ws.run_command("plot sin(x)"));
+        assert_eq!(ws.board.viewports.len(), 1);
+        assert_eq!(ws.board.viewports[0].tool.id, "expression");
+        assert_eq!(rows(&ws, 0), serde_json::json!(["sin(x)"]));
+        assert!(ws.run_command("PLOT r = 1 + cos(3θ)"));
+        assert_eq!(rows(&ws, 1), serde_json::json!(["r = 1 + cos(3θ)"]));
+
+        assert!(!ws.run_command("plot sin("));
+        assert_eq!(ws.board.viewports.len(), 2, "a typo places nothing");
+        let said = ws.log.last().unwrap();
+        assert!(
+            said.starts_with("plot: ") && said.contains("column 5"),
+            "{said}"
+        );
+        assert!(ws.run_command("plot"));
+        assert!(ws.log.last().unwrap().starts_with("plot <expression>"));
+        assert_eq!(ws.board.viewports.len(), 2);
+
+        assert!(ws.run_command("undo"));
+        assert_eq!(ws.board.viewports.len(), 1);
+        assert!(ws.run_command("redo"));
+        assert_eq!(rows(&ws, 1), serde_json::json!(["r = 1 + cos(3θ)"]));
     }
 
     #[test]
