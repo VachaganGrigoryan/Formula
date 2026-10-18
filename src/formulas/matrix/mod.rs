@@ -210,13 +210,13 @@ impl MatrixTransform {
 }
 
 impl Formula for MatrixTransform {
-    fn params(&self) -> Vec<(&'static str, f64)> {
+    fn params(&self) -> Vec<(String, f64)> {
         let Mat2 { a, b, c, d } = product(&self.chain);
         vec![
-            ("a", a as f64),
-            ("b", b as f64),
-            ("c", c as f64),
-            ("d", d as f64),
+            ("a".into(), a as f64),
+            ("b".into(), b as f64),
+            ("c".into(), c as f64),
+            ("d".into(), d as f64),
         ]
     }
 
@@ -709,7 +709,7 @@ mod tests {
             chain: vec![Mat2::new(1.0, 2.0, 3.0, 4.0), Preset::Reflect.matrix()],
             ..Default::default()
         };
-        let names: Vec<_> = f.params().iter().map(|p| p.0).collect();
+        let names: Vec<_> = f.params().into_iter().map(|p| p.0).collect();
         assert_eq!(names, ["a", "b", "c", "d"]);
         // Reflecting in the x axis negates the bottom row.
         let values: Vec<_> = f.params().iter().map(|p| p.1).collect();

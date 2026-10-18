@@ -62,8 +62,8 @@ fn geometry(rect: Rect) -> (Pos2, f32) {
 }
 
 impl Formula for Polar {
-    fn params(&self) -> Vec<(&'static str, f64)> {
-        vec![("r", self.r as f64), ("θ", self.theta as f64)]
+    fn params(&self) -> Vec<(String, f64)> {
+        vec![("r".into(), self.r as f64), ("θ".into(), self.theta as f64)]
     }
 
     fn id(&self) -> &'static str {

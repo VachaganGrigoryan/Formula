@@ -74,8 +74,8 @@ impl Bezier {
 }
 
 impl Formula for Bezier {
-    fn params(&self) -> Vec<(&'static str, f64)> {
-        vec![("t", self.t as f64)]
+    fn params(&self) -> Vec<(String, f64)> {
+        vec![("t".into(), self.t as f64)]
     }
 
     fn id(&self) -> &'static str {

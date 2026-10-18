@@ -32,12 +32,12 @@ pub fn latex_snippet(f: &dyn Formula) -> String {
 }
 
 /// Equations, one per line, then a `where` line with the parameter values.
-pub fn snippet(equations: &[MathText], params: &[(&str, f64)]) -> String {
+pub fn snippet<S: AsRef<str>>(equations: &[MathText], params: &[(S, f64)]) -> String {
     let mut lines: Vec<String> = equations.iter().map(latex_of).collect();
     if !params.is_empty() {
         let values: Vec<String> = params
             .iter()
-            .map(|&(name, v)| format!("{} = {}", param_name(name), number(v)))
+            .map(|(name, v)| format!("{} = {}", param_name(name.as_ref()), number(*v)))
             .collect();
         lines.push(format!(r"\text{{where }} {}", values.join(r",\ ")));
     }
@@ -387,7 +387,7 @@ mod tests {
     #[test]
     fn snippet_without_parameters_has_no_where_line() {
         assert_eq!(
-            snippet(&[MathText::new().t("y = x")], &[]),
+            snippet::<&str>(&[MathText::new().t("y = x")], &[]),
             "\\begin{gathered}\ny = x\n\\end{gathered}"
         );
     }
@@ -417,7 +417,7 @@ mod tests {
             assert!(!params.is_empty(), "{id} reports no parameters");
             let tex = latex_snippet(&*f);
             for (name, _) in params {
-                let name = snippet(&[], &[(name, 0.0)]);
+                let name = snippet(&[], &[(name.as_str(), 0.0)]);
                 let name = name
                     .split("where } ")
                     .nth(1)

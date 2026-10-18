@@ -123,12 +123,12 @@ fn cell_at(grid: Rect, p: Pos2) -> Option<(usize, usize)> {
 }
 
 impl Formula for Luminance {
-    fn params(&self) -> Vec<(&'static str, f64)> {
+    fn params(&self) -> Vec<(String, f64)> {
         let [r, g, b] = self.selected.map(|c| {
             let c = c as f32 / 255.0;
             (if self.linearize { srgb_to_linear(c) } else { c }) as f64
         });
-        vec![("R", r), ("G", g), ("B", b)]
+        vec![("R".into(), r), ("G".into(), g), ("B".into(), b)]
     }
 
     fn id(&self) -> &'static str {

@@ -10,6 +10,8 @@ use std::sync::Arc;
 use egui::text::LayoutJob;
 use egui::{Align, Color32, FontId, TextFormat};
 
+use crate::content::Lang;
+
 /// Colors shared by every formula, chosen for both light and dark themes.
 #[derive(Clone, Copy, Debug)]
 pub struct Palette {
@@ -210,9 +212,25 @@ pub trait Formula {
 
     /// The current values of the parameters in the equations, named as they
     /// appear there (`"θ"`, `"k_r"`; an underscore starts a subscript).
-    fn params(&self) -> Vec<(&'static str, f64)> {
+    fn params(&self) -> Vec<(String, f64)> {
         Vec::new()
     }
+
+    /// Code generated for this instance, shown and exported instead of the
+    /// static `assets/content/<id>/` file (for formulas the user writes).
+    fn export_code(&self, _lang: Lang) -> Option<String> {
+        None
+    }
+
+    /// The user-set state as a JSON object, for `plot` and sheet files. Its
+    /// top-level fields become the sheet's `param` lines.
+    fn save_state(&self) -> Option<serde_json::Value> {
+        None
+    }
+
+    /// Restore what [`Formula::save_state`] wrote. Unknown or malformed
+    /// fields are ignored and keep their current values.
+    fn load_state(&mut self, _state: &serde_json::Value) {}
 
     /// Height of the stage for a given width.
     fn stage_height(&self, width: f32) -> f32 {
