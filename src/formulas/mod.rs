@@ -320,6 +320,13 @@ pub static TOOLS: &[Tool] = &[
         "QDR",
         new::<proofs::quadratic::Quadratic>
     ),
+    tool!(
+        "pythagorean-proof",
+        "Pythagorean theorem",
+        PROOFS,
+        "PYT",
+        new::<proofs::pythagoras::Pythagoras>
+    ),
 ];
 
 /// The tool with this id.

@@ -197,6 +197,11 @@ pub fn tool(painter: &Painter, rect: Rect, id: &str, color: Color32) {
             p.dot(0.2, 0.62, 0.05);
             p.dot(0.8, 0.62, 0.05);
         }
+        "pythagorean-proof" => {
+            // The tilted square inside the big one.
+            p.closed(&[(0.1, 0.1), (0.9, 0.1), (0.9, 0.9), (0.1, 0.9)]);
+            p.closed(&[(0.42, 0.1), (0.9, 0.42), (0.58, 0.9), (0.1, 0.58)]);
+        }
         "force-layout" => {
             let nodes = [
                 (0.2, 0.3),
