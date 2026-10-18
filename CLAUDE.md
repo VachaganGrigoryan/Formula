@@ -17,6 +17,7 @@ cargo test <name_substring>                  # one test, e.g. cargo test every_t
 cargo test formulas::sorting                 # one module's tests
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
+cargo run --release --manifest-path tools/capture/Cargo.toml  # README media -> docs/media (needs ffmpeg)
 ```
 
 Web build (the `wasm-bindgen` CLI version must match the `=0.2.129` pin in Cargo.toml/Cargo.lock):
@@ -154,6 +155,9 @@ the glyph test and the ASCII-LaTeX test. The proof tools live in `formulas/proof
 9. Implement `save_state` / `load_state` (see "Formula state" above). `every_tool_saves_state`,
    `state_round_trips`, `flipped_toggles_survive`, `hostile_state_is_clamped` and
    `animating_leaves_the_saved_state_alone` cover it.
+10. Run the capture tool (`tools/capture`, see Commands) for its `docs/media/<id>.png`, and add its card
+   to the README gallery (copy a neighbouring card's HTML).
+   `content::tests::readme_has_a_gallery_card_for_every_tool` checks both.
 
 A slider with `step_by` must also have `.clamping(egui::SliderClamping::Edits)`. Under the default
 `Always`, egui re-applies the step to the bound value on every draw. That rounded Lorenz's β = 8/3 to

@@ -145,4 +145,29 @@ mod tests {
             }
         }
     }
+
+    /// The README's gallery shows every tool: a picture under `docs/media/`
+    /// (made by `tools/capture`) and a link to its reference doc.
+    #[test]
+    fn readme_has_a_gallery_card_for_every_tool() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let readme = std::fs::read_to_string(root.join("README.md")).unwrap();
+        let mut missing = Vec::new();
+        for t in TOOLS {
+            let doc = format!("assets/content/{}/doc.md", t.id);
+            if !readme.contains(&doc) {
+                missing.push(doc);
+            }
+            let media = ["png", "gif"]
+                .map(|ext| format!("docs/media/{}.{ext}", t.id))
+                .into_iter()
+                .find(|m| readme.contains(m.as_str()));
+            match media {
+                Some(m) if root.join(&m).is_file() => {}
+                Some(m) => missing.push(format!("{m} (file)")),
+                None => missing.push(format!("docs/media/{}.png", t.id)),
+            }
+        }
+        assert!(missing.is_empty(), "README gallery is missing: {missing:?}");
+    }
 }

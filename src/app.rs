@@ -118,6 +118,11 @@ impl FormulaApp {
         app
     }
 
+    /// Replace the board with the sheet in `text` (see `Workspace::open_text`).
+    pub fn open_sheet(&mut self, name: &str, text: &str) -> bool {
+        self.ws.open_text(name, text)
+    }
+
     /// Keep the workspace's copy of the panel state current, and apply the
     /// panel state of a sheet that was just opened.
     fn sync_ui_state(&mut self) {

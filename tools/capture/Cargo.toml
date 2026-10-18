@@ -1,0 +1,15 @@
+[package]
+name = "formula-capture"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# Renders the README's screenshots and GIFs (docs/media). Kept out of the main
+# crate so its wgpu renderer does not slow down `cargo test`.
+[workspace]
+
+[dependencies]
+formula = { path = "../.." }
+egui = "0.36"
+egui_kittest = { version = "0.36", features = ["wgpu", "eframe"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
