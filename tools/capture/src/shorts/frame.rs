@@ -12,7 +12,7 @@ use formula::cad::camera::Camera;
 use formula::cad::canvas::Workspace;
 use formula::cad::theme::{self, Chrome};
 use formula::formula::{Formula, Palette};
-use formula::formulas::{self, ToolEnv};
+use formula::formulas::{self, Tool, ToolEnv};
 
 use super::layout::{self, CAPTION_LINES, EQUATION_LINES, Frame, Subject};
 use super::storyboard::{Cue, Storyboard};
@@ -46,6 +46,7 @@ pub struct Show {
     /// The scene whose `state` was applied last.
     applied: Option<usize>,
     themed: bool,
+    tool: &'static Tool,
     name: String,
     category: String,
     /// Captions too long for the block, reported once each.
@@ -97,6 +98,7 @@ impl Show {
             t: -board.warmup_seconds(),
             applied: None,
             themed: false,
+            tool,
             name: tool.name.to_string(),
             category: tool.category.to_string(),
             overflow: Vec::new(),
@@ -151,6 +153,18 @@ impl Show {
             return;
         }
         self.applied = Some(index);
+        let scene = &self.board.scenes[index];
+        // The first scene starts with the fresh instance already.
+        if scene.restart && index > 0 {
+            let make = self.tool.make;
+            match &mut self.body {
+                Body::Clean { formula, _env } => *formula = make(_env),
+                Body::Chrome { ws, uid, .. } => {
+                    let fresh = make(&ws.board.env);
+                    ws.board.get_mut(*uid).expect("placed viewport").formula = fresh;
+                }
+            }
+        }
         if let Some(state) = self.board.scenes[index].state.clone() {
             self.formula_mut().load_state(&state);
         }

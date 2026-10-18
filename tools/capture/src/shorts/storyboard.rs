@@ -38,6 +38,10 @@ pub struct Scene {
     /// Whether the equation lines are shown during this scene.
     #[serde(default = "yes")]
     pub equations: bool,
+    /// Start the tool over when the scene begins (a fresh instance, then
+    /// `state`), so a search or a sort that has finished runs again.
+    #[serde(default)]
+    pub restart: bool,
 }
 
 fn yes() -> bool {
@@ -279,6 +283,7 @@ mod tests {
         assert!(!s.scenes[1].equations);
         assert_eq!(s.scenes[0].state, Some(serde_json::json!({"rho": 15})));
         assert_eq!(s.scenes[1].heading, "");
+        assert!(!s.scenes[0].restart);
         assert_eq!(s.warmup_seconds(), 3.0);
     }
 

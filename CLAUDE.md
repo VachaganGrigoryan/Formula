@@ -18,6 +18,9 @@ cargo test formulas::sorting                 # one module's tests
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo run --release --manifest-path tools/capture/Cargo.toml  # README media -> docs/media (needs ffmpeg)
+cargo test --release --manifest-path tools/capture/Cargo.toml # renderer tests (storyboard, layout)
+cd tools/shorts && uv run pytest -q && uv run ruff check . && uv run ruff format --check .
+cd tools/shorts && uv run formula-shorts build <script.md> [--dry-run]  # a Short -> generated/
 ```
 
 Web build (the `wasm-bindgen` CLI version must match the `=0.2.129` pin in Cargo.toml/Cargo.lock):
@@ -127,6 +130,18 @@ the glyph test and the ASCII-LaTeX test. The proof tools live in `formulas/proof
 **Embedded content.** `build.rs` scans `assets/content/<tool-id>/` and generates
 `$OUT_DIR/content.rs` with an `include_str!` for each `doc.md`, `main.py`, `main.ts`, `main.rs`.
 `src/content.rs` serves it. Adding content needs no code change.
+
+**Shorts.** Narrated vertical videos of a tool. `tools/shorts` (Python, uv) parses a Markdown
+script (front matter + one `## ` scene each, with optional `state:`, `restart:`, `equations:`,
+`say:` lines), records each scene with a voice provider (`tts/`: elevenlabs, kokoro, edge, say;
+`auto` keeps one provider for the whole video), and writes a storyboard JSON with each scene's
+length. `tools/capture`'s `formula-render` (Rust, egui_kittest + wgpu) draws it at the exact pixel
+size (egui at `size / scale` points), pipes raw frames to ffmpeg and prints a JSON summary;
+`shorts/layout.rs` is the pure frame geometry, `shorts/frame.rs` the painting (clean stage, or a
+`Workspace` with `title_block` off for `--chrome`). Python then mixes the narration and muxes.
+Text is drawn by egui because the local ffmpeg has no `drawtext`. Builds go to
+`generated/<date>_<time>-<tool>/` (gitignored). The `formula-short` skill
+(`.claude/skills/formula-short/`) writes the script and drives the build.
 
 ## Adding a formula (the tests enforce all of this)
 

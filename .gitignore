@@ -3,3 +3,7 @@
 /exports
 /graphify-out
 /tools/capture/target
+/generated
+/tools/shorts/models
+/tools/shorts/.venv
+__pycache__/
