@@ -14,4 +14,5 @@ pub mod inspector;
 pub mod markdown;
 pub mod notebook;
 pub mod overlay;
+pub mod sheet;
 pub mod theme;

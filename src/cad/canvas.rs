@@ -18,6 +18,7 @@ use super::camera::Camera;
 use super::history::{Edit, History};
 use super::icons;
 use super::overlay;
+use super::sheet::{self, Sheet, UiState};
 use super::theme::Chrome;
 use super::{export, notebook};
 use crate::expr;
@@ -176,6 +177,10 @@ pub struct Workspace {
     pub clipboard: Option<String>,
     /// The canvas rect last frame.
     pub view: Rect,
+    /// The panels around the canvas, mirrored by the app each frame so a
+    /// sheet can save them, and set by opening a sheet (`ui_changed`).
+    pub ui: UiState,
+    pub ui_changed: bool,
     gesture: Option<Gesture>,
     panning: bool,
     now: f64,
@@ -195,6 +200,8 @@ impl Workspace {
             request: None,
             clipboard: None,
             view: Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0)),
+            ui: UiState::default(),
+            ui_changed: false,
             gesture: None,
             panning: false,
             now: 0.0,
@@ -235,6 +242,72 @@ impl Workspace {
         } else {
             p.round()
         }
+    }
+
+    // ---- Sheets.
+
+    /// Everything a sheet file saves.
+    pub fn sheet(&self) -> Sheet {
+        Sheet {
+            title: None,
+            camera: self.camera,
+            settings: self.settings,
+            ui: self.ui,
+            shared: self.board.env.save_state(),
+            viewports: self.board.to_model(),
+        }
+    }
+
+    /// Replace the board with the sheet in `text`, as one undo step. A sheet
+    /// that cannot be read changes nothing. `name` is for the messages.
+    pub fn open_text(&mut self, name: &str, text: &str) -> bool {
+        let (sheet, warnings) = match sheet::from_text(text) {
+            Ok(read) => read,
+            Err(e) => {
+                self.say(format!("Could not open {name}: {e}"));
+                return false;
+            }
+        };
+        // The shared data changes in place: viewports brought back by undo
+        // see the sheet's list and grid, not a stale copy.
+        self.board.env.load_state(&sheet.shared);
+        let mut edits = Vec::new();
+        let uids: Vec<u64> = self.board.viewports.iter().map(|v| v.uid).collect();
+        for uid in uids {
+            if let Some((index, vp)) = self.board.remove(uid) {
+                edits.push(Edit::Removed {
+                    index,
+                    vp: Box::new(vp),
+                });
+            }
+        }
+        for m in &sheet.viewports {
+            if let Some(uid) = self.board.add_model(m, true, self.now) {
+                edits.push(Edit::Added { uid });
+            }
+        }
+        self.history.push(Edit::Group(edits));
+        self.board.selection.clear();
+        self.gesture = None;
+        self.camera = Camera::default();
+        self.camera.center = sheet.camera.center;
+        self.camera.zoom = sheet.camera.zoom;
+        self.settings = sheet.settings;
+        self.ui = sheet.ui;
+        self.ui_changed = true;
+        match warnings.len() {
+            0 => self.say(format!("Opened {name}")),
+            n => {
+                self.say(format!(
+                    "Opened {name}, {n} warning{}:",
+                    if n == 1 { "" } else { "s" }
+                ));
+                for w in warnings {
+                    self.say(format!("  {w}"));
+                }
+            }
+        }
+        true
     }
 
     // ---- Commands, shared by shortcuts, menus, panels and the command line.
@@ -1477,6 +1550,59 @@ mod tests {
 
     fn workspace() -> Workspace {
         Workspace::new(Board::default(), Camera::default(), Settings::default())
+    }
+
+    #[test]
+    fn opening_a_bad_sheet_changes_nothing() {
+        let mut ws = workspace();
+        ws.run_command("lor");
+        ws.camera.zoom = 2.0;
+        let before = (ws.board.to_model(), ws.camera, ws.history.can_redo());
+        for bad in [
+            "",
+            "FWB 99\n",
+            "FWB 1\nSECTION VIEWPORT\n  tool lerp\n",
+            "\0\u{1}",
+        ] {
+            assert!(!ws.open_text("bad.fwb", bad));
+            assert_eq!(
+                (ws.board.to_model(), ws.camera, ws.history.can_redo()),
+                before
+            );
+            assert!(
+                ws.log
+                    .last()
+                    .unwrap()
+                    .starts_with("Could not open bad.fwb: ")
+            );
+        }
+        assert!(!ws.ui_changed);
+    }
+
+    #[test]
+    fn opening_is_one_undo_step() {
+        let mut ws = workspace();
+        ws.run_command("lor");
+        ws.run_command("vor");
+        let old = ws.board.to_model();
+        let text = "FWB 1\nSECTION UI\n  theme light\nENDSEC\nSECTION SHARED\n  sorting {\"n\":7}\nENDSEC\nSECTION VIEWPORT\n  uid 1\n  tool lerp\n  param v0 42\nENDSEC\n";
+        assert!(ws.open_text("lesson.fwb", text));
+        assert_eq!(ws.log.last().unwrap(), "Opened lesson.fwb");
+        assert!(ws.ui_changed && !ws.ui.dark);
+        let opened = ws.board.to_model();
+        assert_eq!(opened.len(), 1);
+        assert_eq!(opened[0].state.as_ref().unwrap()["v0"], 42.0);
+        // Fresh uids, so the old viewports can come back without clashing.
+        assert!(old.iter().all(|m| m.uid != opened[0].uid));
+        assert_eq!(ws.board.env.sorting.data.borrow().n, 7);
+        ws.undo();
+        assert_eq!(ws.board.to_model(), old);
+        ws.redo();
+        assert_eq!(ws.board.to_model(), opened);
+        // The workspace's own sheet reads back to the same viewports.
+        let (sheet, warnings) = sheet::from_text(&sheet::to_text(&ws.sheet())).unwrap();
+        assert!(warnings.is_empty());
+        assert_eq!(sheet.viewports, opened);
     }
 
     /// Every tool, placed at its default size and at its minimum size, draws

@@ -9,6 +9,7 @@ use crate::cad::camera::Camera;
 use crate::cad::canvas::{Settings, Workspace};
 use crate::cad::chrome::{self, Panels};
 use crate::cad::inspector::{Inspector, Tab};
+use crate::cad::sheet::UiState;
 use crate::cad::theme::{self, Chrome};
 use crate::content::Lang;
 use crate::formulas::{self, ToolEnv};
@@ -103,6 +104,27 @@ impl FormulaApp {
         app
     }
 
+    /// Keep the workspace's copy of the panel state current, and apply the
+    /// panel state of a sheet that was just opened.
+    fn sync_ui_state(&mut self) {
+        if self.ws.ui_changed {
+            self.ws.ui_changed = false;
+            let ui = self.ws.ui;
+            self.panels.dark = ui.dark;
+            self.panels.browser = ui.browser;
+            self.panels.inspector = ui.inspector;
+            self.inspector.tab = ui.tab;
+            self.inspector.lang = ui.lang;
+        }
+        self.ws.ui = UiState {
+            dark: self.panels.dark,
+            browser: self.panels.browser,
+            inspector: self.panels.inspector,
+            tab: self.inspector.tab,
+            lang: self.inspector.lang,
+        };
+    }
+
     fn first_frame(&mut self, width: f32) {
         if width < NARROW {
             self.panels.browser = false;
@@ -128,6 +150,7 @@ impl FormulaApp {
 
 impl eframe::App for FormulaApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        self.sync_ui_state();
         let dark = self.panels.dark;
         if self.applied != Some(dark) {
             theme::apply(ui.ctx(), dark);
