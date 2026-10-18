@@ -1157,6 +1157,8 @@ dependencies = [
  "egui_kittest",
  "formula",
  "image",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
