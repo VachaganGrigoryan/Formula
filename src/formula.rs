@@ -255,6 +255,16 @@ pub trait Formula {
     /// fields are ignored and keep their current values.
     fn load_state(&mut self, _state: &serde_json::Value) {}
 
+    /// Every field [`Formula::load_state`] accepts, including those
+    /// `save_state` leaves out at the moment (e.g. a position saved only while
+    /// paused). A sheet warns about `param` lines naming anything else.
+    fn state_params(&self) -> Vec<String> {
+        match self.save_state() {
+            Some(serde_json::Value::Object(m)) => m.keys().cloned().collect(),
+            _ => Vec::new(),
+        }
+    }
+
     /// Height of the stage for a given width.
     fn stage_height(&self, width: f32) -> f32 {
         width * 0.75

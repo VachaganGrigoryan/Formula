@@ -225,7 +225,49 @@ impl SearchTree {
     }
 }
 
+/// What a sheet saves of a [`SearchTree`].
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct State {
+    /// The keys in the tree, in the order they went in.
+    keys: Vec<i32>,
+    balance: bool,
+    /// The key the buttons insert, delete or find.
+    key: i32,
+    /// The seed of the next random key.
+    seed: u64,
+    /// Frames per second.
+    speed: f32,
+}
+
+impl SearchTree {
+    fn state(&self) -> State {
+        State {
+            keys: self.history.clone(),
+            balance: self.balance,
+            key: self.key,
+            seed: self.seed,
+            speed: self.player.speed,
+        }
+    }
+
+    fn apply(&mut self, s: State) {
+        let mut keys: Vec<i32> = Vec::new();
+        for k in s.keys {
+            if (-99..=99).contains(&k) && !keys.contains(&k) {
+                keys.push(k);
+            }
+        }
+        self.history = keys;
+        self.set_balance(s.balance);
+        self.key = s.key.clamp(-99, 99);
+        self.seed = s.seed;
+        self.player.speed = s.speed.clamp(1.0, 20.0);
+    }
+}
+
 impl Formula for SearchTree {
+    crate::state_hooks!();
+
     fn id(&self) -> &'static str {
         "binary-search-tree"
     }
@@ -447,6 +489,24 @@ impl Formula for SearchTree {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn inserted_keys_survive_a_save() {
+        let mut t = SearchTree {
+            key: 99,
+            ..Default::default()
+        };
+        t.insert();
+        let saved = t.save_state().unwrap();
+        let mut back = SearchTree::default();
+        back.load_state(&saved);
+        assert!(back.history.contains(&99));
+        assert_eq!(back.history, t.history);
+        // Out-of-range and repeated keys are dropped, so the tree stays small.
+        let many: Vec<i32> = (0..10_000).map(|i| i % 400 - 200).collect();
+        back.load_state(&serde_json::json!({ "keys": many }));
+        assert_eq!(back.history.len(), 199);
+    }
 
     #[test]
     fn tween_moves_shared_ids_and_shows_new_ones_in_place() {

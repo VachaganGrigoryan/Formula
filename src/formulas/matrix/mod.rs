@@ -20,7 +20,8 @@ const SNAP_STEP: f32 = 0.5;
 /// Grid lines on each side of the origin, before and after the transform.
 const GRID: i32 = 12;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 enum Figure {
     Square,
     House,
@@ -209,7 +210,60 @@ impl MatrixTransform {
     }
 }
 
+/// What a sheet saves of a [`MatrixTransform`].
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct State {
+    /// The matrices, first applied first, each as `[[a, b], [c, d]]`.
+    chain: Vec<[[f32; 2]; 2]>,
+    selected: usize,
+    animating: bool,
+    figure: Figure,
+    snap: bool,
+}
+
+impl MatrixTransform {
+    fn state(&self) -> State {
+        State {
+            chain: self
+                .chain
+                .iter()
+                .map(|m| [[m.a, m.b], [m.c, m.d]])
+                .collect(),
+            selected: self.selected,
+            animating: self.animating,
+            figure: self.figure,
+            snap: self.snap,
+        }
+    }
+
+    fn apply(&mut self, s: State) {
+        let chain: Vec<Mat2> = s
+            .chain
+            .iter()
+            .take(MAX_STAGES)
+            .map(|m| {
+                let [[a, b], [c, d]] = m.map(|row| row.map(|v| v.clamp(-LIMIT, LIMIT)));
+                Mat2::new(a, b, c, d)
+            })
+            .collect();
+        if !chain.is_empty() {
+            self.chain = chain;
+        }
+        self.selected = s.selected.min(self.chain.len() - 1);
+        self.animating = s.animating;
+        self.t = if self.animating {
+            0.0
+        } else {
+            self.chain.len() as f32
+        };
+        self.figure = s.figure;
+        self.snap = s.snap;
+    }
+}
+
 impl Formula for MatrixTransform {
+    crate::state_hooks!();
+
     fn params(&self) -> Vec<(String, f64)> {
         let Mat2 { a, b, c, d } = product(&self.chain);
         vec![
@@ -540,6 +594,33 @@ impl Formula for MatrixTransform {
 mod tests {
     use super::math::{Mat2, Preset};
     use super::*;
+
+    #[test]
+    fn a_chain_of_matrices_survives_a_save() {
+        let m = MatrixTransform {
+            chain: vec![
+                Mat2::rotation(0.5),
+                Mat2::new(2.0, 0.0, 0.0, 0.5),
+                Mat2::new(1.0, 1.0, 0.0, 1.0),
+            ],
+            selected: 2,
+            ..Default::default()
+        };
+        let saved = m.save_state().unwrap();
+        let mut back = MatrixTransform::default();
+        back.load_state(&saved);
+        assert_eq!(back.chain, m.chain);
+        assert_eq!(back.selected, 2);
+        // Too many stages are cut, an empty chain is ignored.
+        let five = serde_json::json!({"chain": vec![[[1, 0], [0, 1]]; 5], "selected": 9});
+        back.load_state(&five);
+        assert_eq!(
+            (back.chain.len(), back.selected),
+            (MAX_STAGES, MAX_STAGES - 1)
+        );
+        back.load_state(&serde_json::json!({"chain": []}));
+        assert_eq!(back.chain.len(), MAX_STAGES);
+    }
 
     #[test]
     fn dragging_a_basis_tip_sets_its_column() {

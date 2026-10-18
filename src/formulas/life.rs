@@ -127,7 +127,8 @@ impl Grid {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 enum Pattern {
     Random,
     Glider,
@@ -362,7 +363,71 @@ impl Life {
     }
 }
 
+/// What a sheet saves of a [`Life`].
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct State {
+    /// Columns: one of the grid sizes (48, 96, 160).
+    cols: usize,
+    pattern: Pattern,
+    /// The random pattern's seed.
+    seed: u64,
+    rate: f32,
+    playing: bool,
+    wrap: bool,
+    /// The live cells, one string per row: `#` alive, `.` dead. Saved only
+    /// while paused, since a running simulation changes them every frame.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cells: Option<Vec<String>>,
+}
+
+impl Life {
+    fn state(&self) -> State {
+        let g = &self.grid;
+        State {
+            cols: self.cols,
+            pattern: self.pattern,
+            seed: self.seed,
+            rate: self.rate,
+            playing: self.playing,
+            wrap: g.wrap,
+            cells: (!self.playing).then(|| {
+                crate::state::grid_rows(
+                    g.w,
+                    g.h,
+                    |x, y| {
+                        if g.alive[y * g.w + x] { '#' } else { '.' }
+                    },
+                )
+            }),
+        }
+    }
+
+    fn apply(&mut self, s: State) {
+        if SIZES.iter().any(|&(c, _)| c == s.cols) {
+            self.cols = s.cols;
+        }
+        self.pattern = s.pattern;
+        self.seed = s.seed;
+        self.rate = s.rate.clamp(1.0, 60.0);
+        self.playing = s.playing;
+        self.grid.wrap = s.wrap;
+        self.load();
+        if let Some(cells) = s
+            .cells
+            .and_then(|rows| crate::state::parse_rows(&rows, self.grid.w, self.grid.h))
+        {
+            for (k, ch) in cells.iter().flatten().enumerate() {
+                let alive = *ch == '#';
+                self.grid.alive[k] = alive;
+                self.age[k] = if alive { 0 } else { u16::MAX };
+            }
+        }
+    }
+}
+
 impl Formula for Life {
+    crate::state_hooks!();
+
     fn id(&self) -> &'static str {
         "game-of-life"
     }
@@ -639,6 +704,26 @@ impl Formula for Life {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn painted_cells_survive_a_save() {
+        let mut life = Life {
+            playing: false,
+            ..Default::default()
+        };
+        life.clear();
+        life.grid.set(3, 4, true);
+        let saved = life.save_state().unwrap();
+        let mut back = Life::default();
+        back.load_state(&saved);
+        assert!(back.grid.get(3, 4));
+        assert_eq!(back.grid.alive.iter().filter(|&&a| a).count(), 1);
+        // Rows of the wrong width are ignored: the pattern is drawn instead.
+        let mut bad = saved.clone();
+        bad["cells"] = serde_json::json!(["#.#"]);
+        back.load_state(&bad);
+        assert!(back.grid.alive.iter().filter(|&&a| a).count() > 1);
+    }
 
     fn grid(w: usize, h: usize, rows: &[&str]) -> Grid {
         let mut g = Grid::new(w, h, true);

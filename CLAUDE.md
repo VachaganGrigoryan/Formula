@@ -61,9 +61,35 @@ plays any recorded op log; sorting, pathfinding and MST use op logs, the BST rep
 through `FrameIndex`. `ToolEnv.graphs` shares one grid and one graph per board.
 
 **Persistence.** `app.rs` saves a `Saved` struct under the eframe storage key `"board-v1"`. It
-holds the viewport layout (`board::ViewportModel`: uid, tool id, rect, title, locked, hidden), the
-camera, settings, theme, panel visibility, and the inspector tab/lang. A formula's own state is
-**not** saved. If you change these serialized structs, keep old saves loadable or bump the key.
+holds the viewport layout (`board::ViewportModel`: uid, tool id, rect, title, locked, hidden, and
+`state`, the formula's `save_state`), the board's shared data (`ToolEnv::save_state`: the sorting
+list, the pathfinding grid, the MST graph), the camera, settings, theme, panel visibility, the
+inspector tab/lang and the current sheet file. File > Recent is under `"recent-sheets"`. New
+fields are `#[serde(default)]` (a fixture test loads a save from before `state`); if you change
+these serialized structs, keep old saves loadable or bump the key.
+
+**Formula state.** Each tool saves what the user sets (sliders, toggles, modes, seeds, dragged
+points, painted cells), never caches or hover state. The pattern: a private serde `State` struct,
+`fn state(&self) -> State`, `fn apply(&mut self, s: State)` that clamps every value to its slider
+range and caps lists, and `crate::state_hooks!()` in the `impl Formula` (it adds `save_state`,
+`load_state` through `state::merge`, which takes each field on its own, and `state_params`). A
+value that changes while the formula animates (lerp's `t` while playing, a spinning yaw, a running
+Life grid) is an `Option` saved only while paused, so an animation never marks the sheet unsaved;
+replay tools don't save whether they are playing. The generic tests in `formulas::tests` check
+every tool: it saves, round-trips, keeps flipped toggles, clamps absurd numbers, and its saved state
+stays put while it animates.
+
+**Sheet files.** `cad/fwb.rs` is the generic `.fwb` codec: `FWB <version>`, then `SECTION NAME` …
+`ENDSEC` blocks of `key value` lines (`encode`/`decode`: JSON, numbers lists space-separated, bare
+words unquoted). `cad/sheet.rs` maps a `Sheet` (camera, settings, UI, SHARED, VIEWPORTs with
+`param` lines) to and from it. Reading is lenient: unknown sections, keys, tools and params become
+warnings, missing ones keep their defaults; only a malformed or newer file is an error, and then
+nothing changes. On a format change, bump `fwb::VERSION` and convert old documents in
+`sheet::migrate`. `cad/files.rs` holds the current path, the unsaved mark (`change_key`: the sheet
+text without camera and UI, checked twice a second), the Recent list and the `rfd` dialogs.
+`Workspace::open_text` replaces the board as one undo step (shared data changes in place); commands
+cannot show dialogs, so they set `Workspace::file_request` and the app runs it. The example sheets
+in `assets/sheets/` are embedded by `build.rs` (`sheet::SHEETS`) and must open with no warnings.
 
 **Exports.**
 - `src/latex.rs` converts `MathText` equations to LaTeX. Function words become operators, Greek
@@ -84,8 +110,7 @@ function names, Greek names (`theta` → `θ`) and the constants `pi` and `e`. T
 uses it. Its content files are templates whose `@PARAMS` / `@EXPRESSIONS` regions
 `Formula::export_code` regenerates, and the Code tab and the notebook prefer `export_code` over
 the static file. A test keeps the static files equal to the default instance's export. The
-`plot <expr>` command places a plotter through `Formula::load_state`. `save_state` / `load_state`
-are no-ops for every other tool until sheet files arrive.
+`plot <expr>` command places a plotter through `Formula::load_state`.
 
 **Derivations.** The Inspector's Derive tab shows `derive::all_derivations(f)`. The first entry is
 "Plug in current values", built from `Formula::substitutions` (each a left-hand side, a source
@@ -124,6 +149,9 @@ the glyph test and the ASCII-LaTeX test. The proof tools live in `formulas/proof
    (`every_category_has_a_toolbar_name`); otherwise it shows up as "Other".
 8. `canvas::tests::every_tool_runs_on_the_canvas` places every tool at its default size and its
    `min_size` and runs frames with input, so `paint` must not panic at the minimum size.
+9. Implement `save_state` / `load_state` (see "Formula state" above). `every_tool_saves_state`,
+   `state_round_trips`, `flipped_toggles_survive`, `hostile_state_is_clamped` and
+   `animating_leaves_the_saved_state_alone` cover it.
 
 A slider with `step_by` must also have `.clamping(egui::SliderClamping::Edits)`. Under the default
 `Always`, egui re-applies the step to the bound value on every draw. That rounded Lorenz's β = 8/3 to

@@ -53,7 +53,57 @@ impl Lissajous {
     }
 }
 
+/// What a sheet saves of a [`Lissajous`].
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct State {
+    amp_x: f64,
+    amp_y: f64,
+    a: u32,
+    b: u32,
+    /// Phase offset of x, in units of π.
+    /// Saved only while it is not animating, so a running animation does
+    /// not count as an unsaved change.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    delta: Option<f64>,
+    speed: u32,
+    playing: bool,
+    drift: bool,
+    drift_rate: f64,
+}
+
+impl Lissajous {
+    fn state(&self) -> State {
+        State {
+            amp_x: self.amp_x,
+            amp_y: self.amp_y,
+            a: self.a,
+            b: self.b,
+            delta: (!self.drift).then_some(self.delta),
+            speed: self.speed,
+            playing: self.playing,
+            drift: self.drift,
+            drift_rate: self.drift_rate,
+        }
+    }
+
+    fn apply(&mut self, s: State) {
+        self.amp_x = s.amp_x.clamp(0.1, 1.0);
+        self.amp_y = s.amp_y.clamp(0.1, 1.0);
+        self.a = s.a.clamp(1, 9);
+        self.b = s.b.clamp(1, 9);
+        if let Some(delta) = s.delta {
+            self.delta = delta.rem_euclid(2.0);
+        }
+        self.speed = s.speed.clamp(1, 10);
+        self.playing = s.playing;
+        self.drift = s.drift;
+        self.drift_rate = s.drift_rate.clamp(0.01, 0.3);
+    }
+}
+
 impl Formula for Lissajous {
+    crate::state_hooks!();
+
     fn params(&self) -> Vec<(String, f64)> {
         vec![
             ("A".into(), self.amp_x),

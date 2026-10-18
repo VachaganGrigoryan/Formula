@@ -1,0 +1,83 @@
+FWB 1
+; Formula Workbench sheet
+
+SECTION HEADER
+  app 0.1.0
+  title "Linear algebra basics"
+ENDSEC
+
+SECTION CAMERA
+  center 680.0 557.0
+  zoom 0.68
+ENDSEC
+
+SECTION SETTINGS
+  animate_all true
+  grid true
+  minimap true
+  ortho false
+  rulers true
+  snap true
+ENDSEC
+
+SECTION UI
+  theme dark
+  browser true
+  inspector true
+  tab properties
+  lang python
+ENDSEC
+
+SECTION VIEWPORT
+  uid 1
+  tool matrix-transform
+  title VP-01
+  rect 0.0 0.0 640.0 480.0
+  locked false
+  hidden false
+  param animating false
+  param chain [[[1.0,0.5],[0.0,1.0]],[[0.87,-0.5],[0.5,0.87]]]
+  param figure letter_f
+  param selected 0
+  param snap true
+ENDSEC
+
+SECTION VIEWPORT
+  uid 2
+  tool rotation-matrix
+  title VP-02
+  rect 720.0 0.0 640.0 554.0
+  locked false
+  hidden false
+  param label_angle 0.0
+  param point 0.78 0.32
+  param spinning false
+  param theta 0.6
+ENDSEC
+
+SECTION VIEWPORT
+  uid 3
+  tool perspective-projection
+  title VP-03
+  rect 0.0 634.0 640.0 480.0
+  locked false
+  hidden false
+  param distance 4.0
+  param focal 1.4
+  param pitch -0.35
+  param spinning true
+ENDSEC
+
+SECTION VIEWPORT
+  uid 4
+  tool lerp
+  title VP-04
+  rect 720.0 634.0 640.0 397.0
+  locked false
+  hidden false
+  param ends [[0.12,0.75],[0.88,0.25]]
+  param playing true
+  param speed 3
+  param v0 10.0
+  param v1 90.0
+ENDSEC

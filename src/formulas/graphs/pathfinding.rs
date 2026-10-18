@@ -143,7 +143,33 @@ impl Pathfinding {
     }
 }
 
+/// What a sheet saves of a [`Pathfinding`].
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct State {
+    /// Steps per second.
+    speed: f32,
+    /// Paint mud instead of walls.
+    mud: bool,
+}
+
+impl Pathfinding {
+    fn state(&self) -> State {
+        State {
+            speed: self.player.speed,
+            mud: self.mud,
+        }
+    }
+
+    fn apply(&mut self, s: State) {
+        self.sync();
+        self.player.speed = s.speed.clamp(1.0, 2000.0);
+        self.mud = s.mud;
+    }
+}
+
 impl Formula for Pathfinding {
+    crate::state_hooks!();
+
     fn id(&self) -> &'static str {
         self.search.id()
     }

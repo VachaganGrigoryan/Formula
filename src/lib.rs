@@ -14,6 +14,7 @@ pub mod formula;
 pub mod formulas;
 pub mod latex;
 pub mod rng;
+pub mod state;
 
 pub use app::FormulaApp;
 

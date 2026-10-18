@@ -4,6 +4,9 @@
 //! `main.ts` and `main.rs`. This writes `$OUT_DIR/content.rs`, a table with an
 //! `include_str!` for each file that exists, so adding content needs no code
 //! changes. `content::tests` checks that every tool has all four files.
+//!
+//! It also embeds the example sheets, `assets/sheets/*.fwb`, as
+//! `$OUT_DIR/sheets.rs` (File > Examples).
 
 use std::fmt::Write as _;
 use std::path::Path;
@@ -45,6 +48,36 @@ fn main() {
     }
     out.push_str("];\n");
 
-    let dest = Path::new(&std::env::var("OUT_DIR").unwrap()).join("content.rs");
+    let out_dir = std::env::var("OUT_DIR").unwrap();
+    let dest = Path::new(&out_dir).join("content.rs");
     std::fs::write(dest, out).expect("write content table");
+
+    write_sheets(Path::new(&out_dir));
+}
+
+/// `SHEETS`: (file name, text) for each example sheet, sorted by name.
+fn write_sheets(out_dir: &Path) {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/sheets");
+    println!("cargo:rerun-if-changed={}", root.display());
+    let mut files: Vec<_> = std::fs::read_dir(&root)
+        .map(|it| {
+            it.filter_map(Result::ok)
+                .map(|e| e.path())
+                .filter(|p| p.extension().is_some_and(|x| x == "fwb"))
+                .collect()
+        })
+        .unwrap_or_default();
+    files.sort();
+    let mut out = String::from("pub static SHEETS: &[(&str, &str)] = &[\n");
+    for path in files {
+        println!("cargo:rerun-if-changed={}", path.display());
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        let _ = writeln!(
+            out,
+            "    ({name:?}, include_str!({:?})),",
+            path.display().to_string()
+        );
+    }
+    out.push_str("];\n");
+    std::fs::write(out_dir.join("sheets.rs"), out).expect("write sheets table");
 }

@@ -181,7 +181,41 @@ impl Mandelbrot {
     }
 }
 
+/// What a sheet saves of a [`Mandelbrot`].
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct State {
+    /// The view's center in the complex plane.
+    cx: f64,
+    cy: f64,
+    /// The view's height in the complex plane.
+    span: f64,
+    max_iter: u32,
+}
+
+impl Mandelbrot {
+    fn state(&self) -> State {
+        State {
+            cx: self.view.cx,
+            cy: self.view.cy,
+            span: self.view.span,
+            max_iter: self.max_iter,
+        }
+    }
+
+    fn apply(&mut self, s: State) {
+        self.view = View {
+            cx: s.cx.clamp(-4.0, 4.0),
+            cy: s.cy.clamp(-4.0, 4.0),
+            span: s.span.clamp(1e-13, 8.0),
+        };
+        self.max_iter = s.max_iter.clamp(30, 3000);
+        self.rendered = None;
+    }
+}
+
 impl Formula for Mandelbrot {
+    crate::state_hooks!();
+
     fn id(&self) -> &'static str {
         "mandelbrot"
     }

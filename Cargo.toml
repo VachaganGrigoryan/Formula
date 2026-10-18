@@ -20,7 +20,9 @@ eframe = { version = "0.36", default-features = false, features = [
 egui = "0.36"
 serde = { version = "1.0.229", features = ["derive"] }
 web-time = "1.1"
-serde_json = "1.0.154"
+# File dialogs for opening and saving sheets (xdg-portal on Linux, no GTK).
+rfd = "0.17"
+serde_json = { version = "1.0.154", features = ["float_roundtrip"] }
 
 [features]
 # Sound on the native desktop build. Off by default because on Linux it needs

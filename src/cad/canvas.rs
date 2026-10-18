@@ -15,9 +15,11 @@ use egui::{
 
 use super::board::{self, Board, Guide};
 use super::camera::Camera;
+use super::files::{self, Files};
 use super::history::{Edit, History};
 use super::icons;
 use super::overlay;
+use super::sheet::{self, Sheet, UiState};
 use super::theme::Chrome;
 use super::{export, notebook};
 use crate::expr;
@@ -66,6 +68,13 @@ pub enum Request {
     Docs,
     Derive,
     Code,
+}
+
+/// A file dialog the chrome should open (commands cannot show dialogs).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum FileRequest {
+    Open,
+    SaveAs,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -176,6 +185,13 @@ pub struct Workspace {
     pub clipboard: Option<String>,
     /// The canvas rect last frame.
     pub view: Rect,
+    /// The panels around the canvas, mirrored by the app each frame so a
+    /// sheet can save them, and set by opening a sheet (`ui_changed`).
+    pub ui: UiState,
+    pub ui_changed: bool,
+    /// The current sheet file, its saved state and the Recent list.
+    pub files: Files,
+    pub file_request: Option<FileRequest>,
     gesture: Option<Gesture>,
     panning: bool,
     now: f64,
@@ -195,6 +211,10 @@ impl Workspace {
             request: None,
             clipboard: None,
             view: Rect::from_min_size(Pos2::ZERO, vec2(1200.0, 800.0)),
+            ui: UiState::default(),
+            ui_changed: false,
+            files: Files::default(),
+            file_request: None,
             gesture: None,
             panning: false,
             now: 0.0,
@@ -234,6 +254,253 @@ impl Workspace {
             Camera::snap(p, self.grid_step())
         } else {
             p.round()
+        }
+    }
+
+    // ---- Sheets.
+
+    /// Everything a sheet file saves.
+    pub fn sheet(&self) -> Sheet {
+        Sheet {
+            title: None,
+            camera: self.camera,
+            settings: self.settings,
+            ui: self.ui,
+            shared: self.board.env.save_state(),
+            viewports: self.board.to_model(),
+        }
+    }
+
+    /// Replace the board with the sheet in `text`, as one undo step. A sheet
+    /// that cannot be read changes nothing. `name` is for the messages.
+    pub fn open_text(&mut self, name: &str, text: &str) -> bool {
+        let (sheet, warnings) = match sheet::from_text(text) {
+            Ok(read) => read,
+            Err(e) => {
+                self.say(format!("Could not open {name}: {e}"));
+                return false;
+            }
+        };
+        // The shared data changes in place: viewports brought back by undo
+        // see the sheet's list and grid, not a stale copy.
+        self.board.env.load_state(&sheet.shared);
+        let mut edits = Vec::new();
+        let uids: Vec<u64> = self.board.viewports.iter().map(|v| v.uid).collect();
+        for uid in uids {
+            if let Some((index, vp)) = self.board.remove(uid) {
+                edits.push(Edit::Removed {
+                    index,
+                    vp: Box::new(vp),
+                });
+            }
+        }
+        for m in &sheet.viewports {
+            if let Some(uid) = self.board.add_model(m, true, self.now) {
+                edits.push(Edit::Added { uid });
+            }
+        }
+        self.history.push(Edit::Group(edits));
+        self.board.selection.clear();
+        self.gesture = None;
+        self.camera = Camera::default();
+        self.camera.center = sheet.camera.center;
+        self.camera.zoom = sheet.camera.zoom;
+        self.settings = sheet.settings;
+        self.ui = sheet.ui;
+        self.ui_changed = true;
+        match warnings.len() {
+            0 => self.say(format!("Opened {name}")),
+            n => {
+                self.say(format!(
+                    "Opened {name}, {n} warning{}:",
+                    if n == 1 { "" } else { "s" }
+                ));
+                for w in warnings {
+                    self.say(format!("  {w}"));
+                }
+            }
+        }
+        true
+    }
+
+    /// Open a sheet from its bytes (a dropped file, or one the browser
+    /// handed over). On success it becomes the current file under `name`.
+    pub fn open_bytes(&mut self, name: &str, bytes: &[u8]) -> bool {
+        if bytes.len() as u64 > files::MAX_BYTES {
+            self.say(format!("Could not open {name}: the file is too large"));
+            return false;
+        }
+        let Ok(text) = std::str::from_utf8(bytes) else {
+            self.say(format!(
+                "Could not open {name}: {}",
+                super::fwb::FwbError::NotASheet
+            ));
+            return false;
+        };
+        if !self.open_text(name, text) {
+            return false;
+        }
+        self.files.path = Some(name.to_owned());
+        self.mark_saved();
+        true
+    }
+
+    /// Open the sheet at `path` and remember it under File > Recent. A file
+    /// that is gone is dropped from the list.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn open_path(&mut self, path: &str) -> bool {
+        let name = files::file_name(path);
+        let read = std::fs::metadata(path).and_then(|m| {
+            if m.len() > files::MAX_BYTES {
+                Err(std::io::Error::other("the file is too large"))
+            } else {
+                std::fs::read(path)
+            }
+        });
+        let bytes = match read {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    files::remove_recent(&mut self.files.recent, path);
+                    self.say(format!("Could not open {path}: the file is gone"));
+                } else {
+                    self.say(format!("Could not open {path}: {e}"));
+                }
+                return false;
+            }
+        };
+        if !self.open_bytes(&name, &bytes) {
+            return false;
+        }
+        self.files.path = Some(path.to_owned());
+        files::push_recent(&mut self.files.recent, path);
+        true
+    }
+
+    /// Save the sheet to `path` (on the web: download it under that name),
+    /// which becomes the current file.
+    pub fn save_to(&mut self, path: &str) -> bool {
+        let path = files::with_extension(path);
+        match export::save_sheet(&path, &sheet::to_text(&self.sheet())) {
+            Ok(shown) => {
+                self.say(export::saved_message(Ok(shown)));
+                if !cfg!(target_arch = "wasm32") {
+                    files::push_recent(&mut self.files.recent, &path);
+                }
+                self.files.path = Some(path);
+                self.mark_saved();
+                true
+            }
+            Err(e) => {
+                self.say(export::saved_message(Err(e)));
+                false
+            }
+        }
+    }
+
+    /// Save to the current file, or ask where when there is none (Ctrl+S).
+    pub fn save(&mut self) {
+        match self.files.path.clone() {
+            Some(path) if !cfg!(target_arch = "wasm32") => {
+                self.save_to(&path);
+            }
+            _ => self.file_request = Some(FileRequest::SaveAs),
+        }
+    }
+
+    /// Show the file dialog a command or shortcut asked for. Runs between
+    /// frames' drawing, from the app.
+    pub fn run_file_request(&mut self) {
+        let Some(request) = self.file_request.take() else {
+            return;
+        };
+        match request {
+            #[cfg(not(target_arch = "wasm32"))]
+            FileRequest::Open => {
+                if let Some(path) = files::pick_open() {
+                    self.open_path(&path);
+                }
+            }
+            #[cfg(target_arch = "wasm32")]
+            FileRequest::Open => files::pick_open(self.files.inbox.clone()),
+            #[cfg(not(target_arch = "wasm32"))]
+            FileRequest::SaveAs => {
+                if let Some(path) = files::pick_save(self.files.path.as_deref()) {
+                    self.save_to(&path);
+                }
+            }
+            // The browser asks where to put downloads itself.
+            #[cfg(target_arch = "wasm32")]
+            FileRequest::SaveAs => {
+                let name = self
+                    .files
+                    .path
+                    .as_deref()
+                    .map_or_else(|| "untitled.fwb".to_owned(), files::file_name);
+                self.save_to(&name);
+            }
+        }
+    }
+
+    /// Open one of the built-in example sheets. It is not a file, so Save
+    /// asks where to put it.
+    pub fn open_example(&mut self, title: &str, text: &str) {
+        if self.open_text(title, text) {
+            self.files.path = None;
+            self.mark_saved();
+            self.fit_all();
+        }
+    }
+
+    /// An empty sheet with no file.
+    pub fn new_sheet(&mut self) {
+        self.board.selection = self.board.viewports.iter().map(|v| v.uid).collect();
+        self.delete_selection();
+        self.files.path = None;
+        self.mark_saved();
+    }
+
+    /// The board as it is now counts as saved.
+    pub fn mark_saved(&mut self) {
+        let key = files::change_key(&self.sheet());
+        self.files.mark_saved(key.clone());
+        self.files.check(self.now, &key);
+    }
+
+    /// Update the unsaved mark, at most twice a second.
+    fn check_changes(&mut self) {
+        if self.files.check_due(self.now) {
+            let key = files::change_key(&self.sheet());
+            self.files.check(self.now, &key);
+        }
+    }
+
+    /// Open the first `.fwb` file dropped on the window.
+    fn take_dropped_files(&mut self, ctx: &egui::Context) {
+        let dropped = ctx.input(|i| i.raw.dropped_files.clone());
+        let Some(file) = dropped.first() else {
+            return;
+        };
+        let path = file.path().display().to_string();
+        let name = files::file_name(&path);
+        if !name
+            .to_lowercase()
+            .ends_with(&format!(".{}", super::fwb::SHEET_EXT))
+        {
+            self.say(format!("{name} is not a .fwb sheet"));
+            return;
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        self.open_path(&path);
+        // Browsers only read files asynchronously; the contents arrive in the
+        // inbox, which a later frame opens.
+        #[cfg(target_arch = "wasm32")]
+        {
+            let (file, inbox) = (file.clone(), self.files.inbox.clone());
+            wasm_bindgen_futures::spawn_local(async move {
+                let bytes = file.bytes_async().await;
+                *inbox.borrow_mut() = Some((name, bytes));
+            });
         }
     }
 
@@ -435,13 +702,31 @@ impl Workspace {
                     .map_or("", |(_, rest)| rest.trim());
                 return self.plot(src);
             }
+            "open" => {
+                let path = line
+                    .split_once(char::is_whitespace)
+                    .map_or("", |(_, rest)| rest.trim());
+                #[cfg(not(target_arch = "wasm32"))]
+                if !path.is_empty() {
+                    return self.open_path(path);
+                }
+                let _ = path;
+                self.file_request = Some(FileRequest::Open);
+            }
+            "save" => {
+                let name = line
+                    .split_once(char::is_whitespace)
+                    .map(|(_, rest)| rest.trim());
+                let path = files::resolve_save_path(name, self.files.path.as_deref());
+                return self.save_to(&path);
+            }
             "clear" => {
                 self.board.selection = self.board.viewports.iter().map(|v| v.uid).collect();
                 self.delete_selection();
             }
             "help" | "?" => {
                 self.say("Tools: type an alias (LOR, BEZ, MAN, VOR, LIF, BUB ...) or a tool name to place it.");
-                self.say("Commands: fit, focus, zoom <pct>, del, dup, undo, redo, all, grid, snap, ortho, pan, select, docs, derive, code, latex, ipynb, plot <expr>, clear.");
+                self.say("Commands: fit, focus, zoom <pct>, del, dup, undo, redo, all, grid, snap, ortho, pan, select, docs, derive, code, latex, ipynb, plot <expr>, open [file], save [name], clear.");
             }
             _ => {
                 // A tool: by alias, id or name. "place lorenz" works too.
@@ -551,6 +836,14 @@ impl Workspace {
         if pressed(cmd, Key::A) {
             self.select_all();
         }
+        if pressed(cmd_shift, Key::S) {
+            self.file_request = Some(FileRequest::SaveAs);
+        } else if pressed(cmd, Key::S) {
+            self.save();
+        }
+        if pressed(cmd, Key::O) {
+            self.file_request = Some(FileRequest::Open);
+        }
         if pressed(shift, Key::F) {
             self.focus_selection();
         } else if pressed(none, Key::F) {
@@ -606,6 +899,19 @@ impl Workspace {
         if let Some(text) = self.clipboard.take() {
             ctx.copy_text(text);
         }
+        self.take_dropped_files(&ctx);
+        #[cfg(target_arch = "wasm32")]
+        {
+            let picked = self.files.inbox.borrow_mut().take();
+            match picked {
+                Some((name, Ok(bytes))) => {
+                    self.open_bytes(&name, &bytes);
+                }
+                Some((name, Err(e))) => self.say(format!("Could not read {name}: {e}")),
+                None => {}
+            }
+        }
+        self.check_changes();
         self.keys(&ctx);
 
         let (hover, shift, middle, delta, pinch, primary_down) = ctx.input(|i| {
@@ -1477,6 +1783,179 @@ mod tests {
 
     fn workspace() -> Workspace {
         Workspace::new(Board::default(), Camera::default(), Settings::default())
+    }
+
+    /// A fresh path in the system's temporary folder.
+    fn temp_sheet(name: &str) -> String {
+        let dir = std::env::temp_dir().join(format!("formula-test-{}", std::process::id()));
+        dir.join(name).display().to_string()
+    }
+
+    #[test]
+    fn saved_sheets_open_back_and_join_recent() {
+        let mut ws = workspace();
+        ws.run_command("lor");
+        ws.run_command("bub");
+        let path = temp_sheet("round-trip.fwb");
+        assert!(ws.save_to(&path));
+        assert_eq!(ws.files.recent[0], path);
+        let saved = ws.board.to_model();
+        let mut other = workspace();
+        assert!(other.open_path(&path));
+        let opened = other.board.to_model();
+        assert_eq!(opened.len(), 2);
+        for (a, b) in opened.iter().zip(&saved) {
+            assert_eq!((&a.tool, &a.rect, &a.state), (&b.tool, &b.rect, &b.state));
+        }
+        assert_eq!(other.files.path.as_deref(), Some(path.as_str()));
+        assert!(!other.files.dirty);
+        // A recent file that has since been deleted drops off the list.
+        std::fs::remove_file(&path).unwrap();
+        assert!(!other.open_path(&path));
+        assert!(other.files.recent.is_empty());
+        assert_eq!(other.board.to_model(), opened);
+        assert!(other.log.last().unwrap().contains("gone"));
+    }
+
+    #[test]
+    fn the_unsaved_mark_follows_changes_but_not_the_camera() {
+        let mut ws = workspace();
+        ws.run_command("lerp");
+        ws.mark_saved();
+        let tick = |ws: &mut Workspace| {
+            ws.now += 1.0;
+            ws.check_changes();
+            ws.files.dirty
+        };
+        assert!(!tick(&mut ws));
+        ws.camera.center = pos2(500.0, 500.0);
+        ws.ui.dark = false;
+        assert!(!tick(&mut ws));
+        ws.run_command("vor");
+        assert!(tick(&mut ws));
+        ws.undo();
+        assert!(!tick(&mut ws));
+        let uid = ws.board.viewports[0].uid;
+        let f = &mut ws.board.get_mut(uid).unwrap().formula;
+        f.load_state(&serde_json::json!({"v0": 1.0}));
+        assert!(tick(&mut ws));
+        assert!(ws.files.title().ends_with('\u{2022}'));
+    }
+
+    #[test]
+    fn dropped_bytes_open_a_sheet_and_anything_else_is_refused() {
+        let mut ws = workspace();
+        ws.run_command("lor");
+        let before = ws.board.to_model();
+        assert!(!ws.open_bytes("photo.fwb", &[0xff, 0xd8, 0xff, 0x00]));
+        assert!(!ws.open_bytes("notes.fwb", b"just some notes"));
+        assert_eq!(ws.board.to_model(), before);
+        assert!(ws.log.last().unwrap().contains("not a Formula sheet"));
+        let text = "FWB 1\nSECTION VIEWPORT\n  tool voronoi\nENDSEC\n";
+        assert!(ws.open_bytes("cells.fwb", text.as_bytes()));
+        assert_eq!(ws.board.viewports[0].tool.id, "voronoi");
+        assert_eq!(ws.files.title(), "cells.fwb");
+    }
+
+    #[test]
+    fn file_shortcuts_ask_for_dialogs() {
+        let mut ws = workspace();
+        let ctx = egui::Context::default();
+        let chrome = Chrome::graphite();
+        let palette = super::super::theme::palette(true);
+        let press = |ws: &mut Workspace, modifiers: Modifiers, key: Key| {
+            ws.file_request = None;
+            let mut input = egui::RawInput::default();
+            input.events.push(egui::Event::Key {
+                key,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers,
+            });
+            let mut out = ctx.run_ui(input, |ui| {
+                egui::CentralPanel::default().show(ui, |ui| ws.show(ui, &chrome, &palette));
+            });
+            out.textures_delta.clear();
+            ws.file_request
+        };
+        let (cmd, shift) = (Modifiers::COMMAND, Modifiers::SHIFT);
+        assert_eq!(press(&mut ws, cmd, Key::O), Some(FileRequest::Open));
+        assert_eq!(press(&mut ws, cmd, Key::S), Some(FileRequest::SaveAs));
+        assert_eq!(
+            press(&mut ws, cmd | shift, Key::S),
+            Some(FileRequest::SaveAs)
+        );
+        // With a file, Ctrl+S saves straight to it.
+        let path = temp_sheet("shortcut.fwb");
+        assert!(ws.save_to(&path));
+        assert_eq!(press(&mut ws, cmd, Key::S), None);
+        assert_eq!(ws.log.last().unwrap(), &format!("Saved {path}"));
+    }
+
+    #[test]
+    fn open_without_a_file_asks_the_chrome_for_a_dialog() {
+        let mut ws = workspace();
+        assert!(ws.run_command("open"));
+        assert_eq!(ws.file_request, Some(FileRequest::Open));
+        ws.file_request = None;
+        ws.save();
+        assert_eq!(ws.file_request, Some(FileRequest::SaveAs));
+        ws.run_command("help");
+        assert!(ws.log.last().unwrap().contains("open [file], save [name]"));
+    }
+
+    #[test]
+    fn opening_a_bad_sheet_changes_nothing() {
+        let mut ws = workspace();
+        ws.run_command("lor");
+        ws.camera.zoom = 2.0;
+        let before = (ws.board.to_model(), ws.camera, ws.history.can_redo());
+        for bad in [
+            "",
+            "FWB 99\n",
+            "FWB 1\nSECTION VIEWPORT\n  tool lerp\n",
+            "\0\u{1}",
+        ] {
+            assert!(!ws.open_text("bad.fwb", bad));
+            assert_eq!(
+                (ws.board.to_model(), ws.camera, ws.history.can_redo()),
+                before
+            );
+            assert!(
+                ws.log
+                    .last()
+                    .unwrap()
+                    .starts_with("Could not open bad.fwb: ")
+            );
+        }
+        assert!(!ws.ui_changed);
+    }
+
+    #[test]
+    fn opening_is_one_undo_step() {
+        let mut ws = workspace();
+        ws.run_command("lor");
+        ws.run_command("vor");
+        let old = ws.board.to_model();
+        let text = "FWB 1\nSECTION UI\n  theme light\nENDSEC\nSECTION SHARED\n  sorting {\"n\":7}\nENDSEC\nSECTION VIEWPORT\n  uid 1\n  tool lerp\n  param v0 42\nENDSEC\n";
+        assert!(ws.open_text("lesson.fwb", text));
+        assert_eq!(ws.log.last().unwrap(), "Opened lesson.fwb");
+        assert!(ws.ui_changed && !ws.ui.dark);
+        let opened = ws.board.to_model();
+        assert_eq!(opened.len(), 1);
+        assert_eq!(opened[0].state.as_ref().unwrap()["v0"], 42.0);
+        // Fresh uids, so the old viewports can come back without clashing.
+        assert!(old.iter().all(|m| m.uid != opened[0].uid));
+        assert_eq!(ws.board.env.sorting.data.borrow().n, 7);
+        ws.undo();
+        assert_eq!(ws.board.to_model(), old);
+        ws.redo();
+        assert_eq!(ws.board.to_model(), opened);
+        // The workspace's own sheet reads back to the same viewports.
+        let (sheet, warnings) = sheet::from_text(&sheet::to_text(&ws.sheet())).unwrap();
+        assert!(warnings.is_empty());
+        assert_eq!(sheet.viewports, opened);
     }
 
     /// Every tool, placed at its default size and at its minimum size, draws

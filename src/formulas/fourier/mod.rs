@@ -210,7 +210,48 @@ fn chain(
     p
 }
 
+/// What a sheet saves of a [`Epicycles`].
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct State {
+    /// The animal drawn, by name.
+    animal: String,
+    /// Terms chosen on the slider.
+    terms: usize,
+    speed: u32,
+    playing: bool,
+    guide: bool,
+}
+
+impl Epicycles {
+    fn state(&self) -> State {
+        State {
+            animal: self.animals[self.current].name.clone(),
+            terms: self.target,
+            speed: self.speed,
+            playing: self.playing,
+            guide: self.guide,
+        }
+    }
+
+    fn apply(&mut self, s: State) {
+        if let Some(i) = self.animals.iter().position(|a| a.name == s.animal)
+            && i != self.current
+        {
+            self.select(i);
+        }
+        self.target = s.terms.clamp(1, MAX_TERMS);
+        if self.grow.is_none() {
+            self.set_n(self.target);
+        }
+        self.speed = s.speed.clamp(1, 10);
+        self.playing = s.playing;
+        self.guide = s.guide;
+    }
+}
+
 impl Formula for Epicycles {
+    crate::state_hooks!();
+
     fn id(&self) -> &'static str {
         "fourier-epicycles"
     }
@@ -479,5 +520,24 @@ impl Formula for Epicycles {
             );
             ui.small(". Outlines were traced and simplified.");
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_animal_is_saved_by_name() {
+        let mut f = Epicycles::default();
+        let other = (f.current + 1) % f.animals.len();
+        f.select(other);
+        let saved = f.save_state().unwrap();
+        assert_eq!(saved["animal"], f.animals[other].name.as_str());
+        let mut back = Epicycles::default();
+        back.load_state(&saved);
+        assert_eq!(back.current, other);
+        back.load_state(&serde_json::json!({"animal": "Unicorn"}));
+        assert_eq!(back.current, other);
     }
 }

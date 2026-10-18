@@ -29,6 +29,8 @@ pub mod rotation;
 pub mod sorting;
 pub mod voronoi;
 
+use serde_json::{Map, Value, json};
+
 use crate::formula::Formula;
 
 // Sidebar groups. Categories appear in the order their first formula is registered.
@@ -65,6 +67,79 @@ impl ToolEnv {
         Self {
             sorting: sorting::Session::new(),
             graphs: graphs::Session::new(),
+        }
+    }
+}
+
+/// The shared sorting list, as saved.
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct SortingState {
+    n: usize,
+    dist: sorting::data::Distribution,
+    seed: u64,
+    skin: sorting::skin::Skin,
+}
+
+/// The shared MST graph, as saved.
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct GraphState {
+    points: Vec<[f32; 2]>,
+    seed: u64,
+}
+
+impl ToolEnv {
+    /// What the board's viewports share, as JSON fields (a sheet's SHARED
+    /// section): the sorting list, the pathfinding grid and the MST graph.
+    pub fn save_state(&self) -> Map<String, Value> {
+        let data = self.sorting.data.borrow();
+        let sorting = SortingState {
+            n: data.n,
+            dist: data.dist,
+            seed: data.seed(),
+            skin: self.sorting.view.borrow().skin,
+        };
+        let graph = self.graphs.graph.borrow();
+        let graph = GraphState {
+            points: graph.points().to_vec(),
+            seed: graph.seed(),
+        };
+        let short = |v: Option<Value>| v.unwrap_or(Value::Null);
+        let mut map = Map::new();
+        map.insert("sorting".into(), short(crate::state::to_value(&sorting)));
+        map.insert("grid".into(), json!(self.graphs.grid.borrow().to_rows()));
+        map.insert("graph".into(), short(crate::state::to_value(&graph)));
+        map
+    }
+
+    /// Restore what [`ToolEnv::save_state`] wrote, in place, so viewports
+    /// already sharing this data see the change. Missing or malformed fields
+    /// keep the current data.
+    pub fn load_state(&mut self, state: &Map<String, Value>) {
+        if let Some(v) = state.get("sorting") {
+            let current = {
+                let data = self.sorting.data.borrow();
+                SortingState {
+                    n: data.n,
+                    dist: data.dist,
+                    seed: data.seed(),
+                    skin: self.sorting.view.borrow().skin,
+                }
+            };
+            let s = crate::state::merge(&current, v);
+            self.sorting.data.borrow_mut().set(s.n, s.dist, s.seed);
+            self.sorting.view.borrow_mut().skin = s.skin;
+        }
+        if let Some(rows) = state
+            .get("grid")
+            .and_then(|v| serde_json::from_value::<Vec<String>>(v.clone()).ok())
+        {
+            self.graphs.grid.borrow_mut().load_rows(&rows);
+        }
+        if let Some(g) = state
+            .get("graph")
+            .and_then(|v| serde_json::from_value::<GraphState>(v.clone()).ok())
+        {
+            self.graphs.graph.borrow_mut().set_points(&g.points, g.seed);
         }
     }
 }
@@ -370,6 +445,166 @@ pub fn registry() -> Vec<Box<dyn Formula>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every tool that saves its state, with that state.
+    fn saved_states() -> Vec<(&'static Tool, Map<String, Value>)> {
+        let env = ToolEnv::new();
+        TOOLS
+            .iter()
+            .filter_map(|t| match (t.make)(&env).save_state() {
+                Some(Value::Object(m)) => Some((t, m)),
+                Some(other) => panic!("{}: state is not an object: {other}", t.id),
+                None => None,
+            })
+            .collect()
+    }
+
+    /// Paint and show the controls of `f` for one frame at its minimum size.
+    fn one_frame(ctx: &egui::Context, f: &mut dyn Formula) {
+        let palette = crate::formula::Palette::dark();
+        let mut out = ctx.run_ui(Default::default(), |ui| {
+            let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, f.min_size());
+            f.paint(ui.painter(), rect, &palette, 1.0 / 60.0);
+            f.controls(ui, &palette);
+        });
+        out.textures_delta.clear();
+    }
+
+    #[test]
+    fn every_tool_saves_state() {
+        let saving: Vec<&str> = saved_states().iter().map(|(t, _)| t.id).collect();
+        let missing: Vec<&str> = TOOLS
+            .iter()
+            .map(|t| t.id)
+            .filter(|id| !saving.contains(id))
+            .collect();
+        assert!(missing.is_empty(), "no save_state: {missing:?}");
+    }
+
+    /// Saving, loading into a fresh instance and saving again gives the same
+    /// state, and every field name can be a sheet `param` name.
+    #[test]
+    fn state_round_trips() {
+        let env = ToolEnv::new();
+        for (tool, s1) in saved_states() {
+            for key in s1.keys() {
+                let ok = key.starts_with(|c: char| c.is_ascii_lowercase())
+                    && key
+                        .chars()
+                        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_');
+                assert!(ok, "{}: field {key:?} is not a param name", tool.id);
+            }
+            let mut fresh = (tool.make)(&env);
+            fresh.load_state(&Value::Object(s1.clone()));
+            assert_eq!(fresh.save_state(), Some(Value::Object(s1)), "{}", tool.id);
+        }
+    }
+
+    /// A running animation does not change what a sheet saves, so it never
+    /// counts as an unsaved change.
+    #[test]
+    fn animating_leaves_the_saved_state_alone() {
+        let env = ToolEnv::new();
+        let ctx = egui::Context::default();
+        for tool in TOOLS {
+            let mut f = (tool.make)(&env);
+            let s0 = f.save_state().unwrap();
+            f.load_state(&s0);
+            let s1 = f.save_state();
+            for _ in 0..30 {
+                one_frame(&ctx, f.as_mut());
+            }
+            assert_eq!(f.save_state(), s1, "{}", tool.id);
+            for key in s0.as_object().unwrap().keys() {
+                assert!(f.state_params().contains(key), "{}: {key}", tool.id);
+            }
+        }
+    }
+
+    /// Flipping any saved toggle survives a round trip.
+    #[test]
+    fn flipped_toggles_survive() {
+        let env = ToolEnv::new();
+        for (tool, s1) in saved_states() {
+            for (key, v) in &s1 {
+                let Some(b) = v.as_bool() else { continue };
+                let mut changed = s1.clone();
+                changed.insert(key.clone(), json!(!b));
+                let mut fresh = (tool.make)(&env);
+                fresh.load_state(&Value::Object(changed));
+                let saved = fresh.save_state().unwrap();
+                assert_eq!(saved[key], json!(!b), "{}: {key}", tool.id);
+            }
+        }
+    }
+
+    /// Absurd numbers in a sheet are clamped or ignored: nothing panics,
+    /// nothing hangs, and what is saved afterwards is finite.
+    #[test]
+    fn hostile_state_is_clamped() {
+        let env = ToolEnv::new();
+        let ctx = egui::Context::default();
+        let started = web_time::Instant::now();
+        for (tool, s1) in saved_states() {
+            for (key, v) in &s1 {
+                if !v.is_number() {
+                    continue;
+                }
+                for bad in [
+                    json!(1e12),
+                    json!(-1e12),
+                    json!(4_000_000_000u64),
+                    Value::Null,
+                    json!("x"),
+                ] {
+                    let mut hostile = s1.clone();
+                    hostile.insert(key.clone(), bad.clone());
+                    let mut f = (tool.make)(&env);
+                    f.load_state(&Value::Object(hostile));
+                    one_frame(&ctx, f.as_mut());
+                    let after = f.save_state().unwrap();
+                    let n = after[key].as_f64();
+                    assert!(
+                        n.is_some_and(|n| n.is_finite() && n.abs() < 1e11),
+                        "{}: {key} = {bad} saved as {}",
+                        tool.id,
+                        after[key]
+                    );
+                }
+            }
+        }
+        assert!(
+            started.elapsed().as_secs() < 20,
+            "took {:?}",
+            started.elapsed()
+        );
+    }
+
+    #[test]
+    fn shared_state_round_trips() {
+        let env = ToolEnv::new();
+        env.sorting.data.borrow_mut().shuffle();
+        {
+            let mut grid = env.graphs.grid.borrow_mut();
+            let i = grid.index(5, 5);
+            grid.set_wall(i, true);
+        }
+        env.graphs.graph.borrow_mut().move_point(0, [0.5, 0.5]);
+        let saved = env.save_state();
+        let mut fresh = ToolEnv::new();
+        fresh.load_state(&saved);
+        assert_eq!(fresh.save_state(), saved);
+        // Hostile values are clamped or ignored.
+        let mut hostile = saved.clone();
+        hostile.insert("sorting".into(), json!({"n": 100000, "seed": "x"}));
+        hostile.insert("grid".into(), json!(["..", ".."]));
+        hostile.insert("graph".into(), json!({"points": [[1e30, -5.0]], "seed": 3}));
+        fresh.load_state(&hostile);
+        assert_eq!(fresh.sorting.data.borrow().n, sorting::data::MAX_N);
+        assert_eq!(json!(fresh.graphs.grid.borrow().to_rows()), saved["grid"]);
+        assert_eq!(fresh.graphs.graph.borrow().points(), &[[0.98, 0.02]]);
+        fresh.load_state(&Map::new());
+    }
 
     #[test]
     fn tools_match_their_formulas() {

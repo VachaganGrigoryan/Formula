@@ -123,7 +123,34 @@ fn cell_at(grid: Rect, p: Pos2) -> Option<(usize, usize)> {
     Some((col.min(COLS - 1), row.min(ROWS.len() - 1)))
 }
 
+/// What a sheet saves of a [`Luminance`].
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct State {
+    /// The picked color, sRGB.
+    selected: [u8; 3],
+    linearize: bool,
+    naive: bool,
+}
+
+impl Luminance {
+    fn state(&self) -> State {
+        State {
+            selected: self.selected,
+            linearize: self.linearize,
+            naive: self.naive,
+        }
+    }
+
+    fn apply(&mut self, s: State) {
+        self.selected = s.selected;
+        self.linearize = s.linearize;
+        self.naive = s.naive;
+    }
+}
+
 impl Formula for Luminance {
+    crate::state_hooks!();
+
     fn substitutions(&self) -> Vec<Substitution> {
         let params = self.params();
         let values: Vec<(&str, f64)> = params.iter().map(|(n, v)| (n.as_str(), *v)).collect();

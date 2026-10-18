@@ -28,6 +28,9 @@ pub struct Graph {
     seed: u64,
 }
 
+/// The most points a graph keeps when loaded from a sheet.
+pub const MAX_POINTS: usize = 64;
+
 impl Graph {
     pub fn random(n: usize, seed: u64) -> Self {
         let mut rng = Rng::new(seed);
@@ -75,6 +78,26 @@ impl Graph {
     /// Regenerates from the next seed in this graph's own sequence.
     pub fn regenerate_next(&mut self, n: usize) {
         self.regenerate(n, self.seed.wrapping_add(1));
+    }
+
+    /// The seed of the last generated point set.
+    pub fn seed(&self) -> u64 {
+        self.seed
+    }
+
+    /// Replace the points (e.g. from a sheet): non-finite points are dropped,
+    /// the rest are kept in the square, and at most `MAX_POINTS` are kept.
+    pub fn set_points(&mut self, points: &[[f32; 2]], seed: u64) {
+        let points: Vec<[f32; 2]> = points
+            .iter()
+            .filter(|p| p[0].is_finite() && p[1].is_finite())
+            .take(MAX_POINTS)
+            .map(|p| [p[0].clamp(0.02, 0.98), p[1].clamp(0.02, 0.98)])
+            .collect();
+        self.edges = delaunay(&points);
+        self.points = points;
+        self.seed = seed;
+        self.generation += 1;
     }
 
     /// Moves point `i`, keeping it in the square and off every other point.

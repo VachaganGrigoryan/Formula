@@ -12,10 +12,11 @@
 <body>
 <canvas id="formula_canvas"></canvas>
 <script>
-  // The workspace uses Ctrl+D (duplicate), Ctrl+0 / Ctrl+= / Ctrl+- (zoom) and
-  // Ctrl+A; keep the browser from bookmarking, page-zooming or selecting the page.
+  // The workspace uses Ctrl+D (duplicate), Ctrl+0 / Ctrl+= / Ctrl+- (zoom),
+  // Ctrl+A, Ctrl+S and Ctrl+O; keep the browser from bookmarking, page-zooming,
+  // selecting, saving the page or opening its own file picker.
   window.addEventListener("keydown", (e) => {
-    if ((e.ctrlKey || e.metaKey) && ["d", "0", "=", "+", "-", "a"].includes(e.key.toLowerCase())) {
+    if ((e.ctrlKey || e.metaKey) && ["d", "0", "=", "+", "-", "a", "s", "o"].includes(e.key.toLowerCase())) {
       e.preventDefault();
     }
   }, { capture: true });

@@ -9,12 +9,15 @@ use crate::cad::camera::Camera;
 use crate::cad::canvas::{Settings, Workspace};
 use crate::cad::chrome::{self, Panels};
 use crate::cad::inspector::{Inspector, Tab};
+use crate::cad::sheet::UiState;
 use crate::cad::theme::{self, Chrome};
 use crate::content::Lang;
-use crate::formulas;
+use crate::formulas::{self, ToolEnv};
 
 /// Storage key for the saved workspace.
 const KEY: &str = "board-v1";
+/// Storage key for File > Recent (desktop), kept apart from the board.
+const RECENT_KEY: &str = "recent-sheets";
 /// Below this width the side panels start hidden.
 const NARROW: f32 = 900.0;
 
@@ -28,6 +31,12 @@ struct Saved {
     inspector: bool,
     tab: Tab,
     lang: Lang,
+    /// The board's shared data (sorting list, graph grid); absent in older saves.
+    #[serde(default)]
+    shared: Option<serde_json::Map<String, serde_json::Value>>,
+    /// The sheet file the board came from or was saved to.
+    #[serde(default)]
+    file: Option<String>,
 }
 
 pub struct FormulaApp {
@@ -41,6 +50,8 @@ pub struct FormulaApp {
     /// A formula to show once the canvas exists (from the URL).
     focus_pending: Option<String>,
     started: bool,
+    /// The window title last set.
+    title: String,
 }
 
 impl FormulaApp {
@@ -52,12 +63,17 @@ impl FormulaApp {
     /// id, e.g. from the URL) is brought into view, placed first if needed.
     pub fn with_initial(cc: &eframe::CreationContext<'_>, initial: Option<&str>) -> Self {
         let saved: Option<Saved> = cc.storage.and_then(|s| eframe::get_value(s, KEY));
+        let file = saved.as_ref().and_then(|s| s.file.clone());
         let initial = initial
             .filter(|id| formulas::tool(id).is_some())
             .map(str::to_owned);
         let mut app = match saved {
             Some(s) if !s.viewports.is_empty() => {
-                let board = Board::from_model(&s.viewports);
+                let mut env = ToolEnv::new();
+                if let Some(shared) = &s.shared {
+                    env.load_state(shared);
+                }
+                let board = Board::from_model(&s.viewports, env);
                 let mut panels = Panels::new(s.dark);
                 panels.browser = s.browser;
                 panels.inspector = s.inspector;
@@ -69,6 +85,7 @@ impl FormulaApp {
                     fit_pending: false,
                     focus_pending: initial.clone(),
                     started: false,
+                    title: String::new(),
                 }
             }
             _ => {
@@ -87,13 +104,39 @@ impl FormulaApp {
                     fit_pending: true,
                     focus_pending: initial,
                     started: false,
+                    title: String::new(),
                 }
             }
         };
+        app.ws.files.path = file;
+        if let Some(s) = cc.storage {
+            app.ws.files.recent = eframe::get_value(s, RECENT_KEY).unwrap_or_default();
+        }
         app.ws
             .say("Welcome. Pick a formula tool and click the canvas, or type help.");
         cc.egui_ctx.options_mut(|o| o.zoom_with_keyboard = false);
         app
+    }
+
+    /// Keep the workspace's copy of the panel state current, and apply the
+    /// panel state of a sheet that was just opened.
+    fn sync_ui_state(&mut self) {
+        if self.ws.ui_changed {
+            self.ws.ui_changed = false;
+            let ui = self.ws.ui;
+            self.panels.dark = ui.dark;
+            self.panels.browser = ui.browser;
+            self.panels.inspector = ui.inspector;
+            self.inspector.tab = ui.tab;
+            self.inspector.lang = ui.lang;
+        }
+        self.ws.ui = UiState {
+            dark: self.panels.dark,
+            browser: self.panels.browser,
+            inspector: self.panels.inspector,
+            tab: self.inspector.tab,
+            lang: self.inspector.lang,
+        };
     }
 
     fn first_frame(&mut self, width: f32) {
@@ -116,11 +159,26 @@ impl FormulaApp {
             self.ws.fit_all();
             self.fit_pending = false;
         }
+        // What was restored counts as saved.
+        self.ws.mark_saved();
+    }
+
+    /// "lesson.fwb • - Formula" in the window (or browser tab) title.
+    fn update_title(&mut self, ctx: &egui::Context) {
+        let title = format!("{} - Formula", self.ws.files.title());
+        if title == self.title {
+            return;
+        }
+        #[cfg(target_arch = "wasm32")]
+        crate::web::set_title(&title);
+        ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
+        self.title = title;
     }
 }
 
 impl eframe::App for FormulaApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        self.sync_ui_state();
         let dark = self.panels.dark;
         if self.applied != Some(dark) {
             theme::apply(ui.ctx(), dark);
@@ -211,6 +269,8 @@ impl eframe::App for FormulaApp {
                 self.ws.show(ui, &chrome, &palette);
             });
         chrome::help_window(ui.ctx(), &mut self.panels, &chrome);
+        self.ws.run_file_request();
+        self.update_title(ui.ctx());
 
         #[cfg(target_arch = "wasm32")]
         {
@@ -234,8 +294,11 @@ impl eframe::App for FormulaApp {
             inspector: self.panels.inspector,
             tab: self.inspector.tab,
             lang: self.inspector.lang,
+            shared: Some(self.ws.board.env.save_state()),
+            file: self.ws.files.path.clone(),
         };
         eframe::set_value(storage, KEY, &saved);
+        eframe::set_value(storage, RECENT_KEY, &self.ws.files.recent);
     }
 
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {

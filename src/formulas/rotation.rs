@@ -91,7 +91,53 @@ fn plane(rect: Rect) -> (Pos2, f32) {
     )
 }
 
+/// What a sheet saves of a [`Rotation`].
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct State {
+    /// Saved only while it is not animating, so a running animation does
+    /// not count as an unsaved change.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    theta: Option<f32>,
+    spinning: bool,
+    /// The point being rotated, in plane units.
+    point: [f32; 2],
+    /// Tilt of the chart's labels, in radians.
+    label_angle: f32,
+}
+
+impl Rotation {
+    fn state(&self) -> State {
+        State {
+            theta: (!self.spinning).then_some(self.theta),
+            spinning: self.spinning,
+            point: self.point,
+            label_angle: self.label_angle,
+        }
+    }
+
+    fn apply(&mut self, s: State) {
+        if let Some(theta) = s.theta {
+            self.theta = if (-PI..=PI).contains(&theta) {
+                theta
+            } else {
+                (theta + PI).rem_euclid(2.0 * PI) - PI
+            };
+        }
+        self.spinning = s.spinning;
+        let [x, y] = s.point;
+        let len = x.hypot(y);
+        self.point = if len > 1.1 {
+            [x / len * 1.1, y / len * 1.1]
+        } else {
+            [x, y]
+        };
+        self.label_angle = s.label_angle.clamp(0.0, PI / 2.0);
+    }
+}
+
 impl Formula for Rotation {
+    crate::state_hooks!();
+
     fn derivations(&self) -> Vec<Derivation> {
         let m = MathText::new;
         vec![Derivation::new(

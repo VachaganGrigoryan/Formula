@@ -63,7 +63,8 @@ pub fn altitude(a: f64, b: f64) -> (f64, f64, f64, f64) {
     (c, a * a / c, b * b / c, a * b / c)
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 enum Mode {
     Rearrange,
     Similar,
@@ -260,7 +261,45 @@ impl Pythagoras {
     }
 }
 
+/// What a sheet saves of a [`Pythagoras`].
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct State {
+    a: f64,
+    b: f64,
+    /// Saved only while it is not animating, so a running animation does
+    /// not count as an unsaved change.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    t: Option<f64>,
+    playing: bool,
+    mode: Mode,
+}
+
+impl Pythagoras {
+    fn state(&self) -> State {
+        State {
+            a: self.a,
+            b: self.b,
+            t: (!self.playing).then_some(self.t),
+            playing: self.playing,
+            mode: self.mode,
+        }
+    }
+
+    fn apply(&mut self, s: State) {
+        self.a = s.a.clamp(0.5, 6.0);
+        self.b = s.b.clamp(0.5, 6.0);
+        if let Some(t) = s.t {
+            self.t = t.clamp(0.0, 1.0);
+            self.phase = CYCLE * (0.1 + 0.35 * self.t);
+        }
+        self.playing = s.playing;
+        self.mode = s.mode;
+    }
+}
+
 impl Formula for Pythagoras {
+    crate::state_hooks!();
+
     fn id(&self) -> &'static str {
         "pythagorean-proof"
     }

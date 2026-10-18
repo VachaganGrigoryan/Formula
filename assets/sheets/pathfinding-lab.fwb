@@ -1,0 +1,66 @@
+FWB 1
+; Formula Workbench sheet
+
+SECTION HEADER
+  app 0.1.0
+  title "Pathfinding lab"
+ENDSEC
+
+SECTION CAMERA
+  center 1040.0 228.0
+  zoom 0.63
+ENDSEC
+
+SECTION SETTINGS
+  animate_all true
+  grid true
+  minimap true
+  ortho false
+  rulers true
+  snap true
+ENDSEC
+
+SECTION UI
+  theme dark
+  browser true
+  inspector true
+  tab properties
+  lang python
+ENDSEC
+
+SECTION SHARED
+  grid ["###############################","#.#...#.............#.........#","#.#.###.#######.###.#########.#","#.#...#.......#...#.......#...#","#.###.#######.###.#######.#.#.#","#...#.......#.#.#.......#...#.#","###.###.###.#~#~#######.#####.#","#.#...#...#.~~~~#~~~....#.....#","#.###.###########~#######.#####","#S..#.......~~~~#~~~#...#...#G#","#.#.###########~###~#.#.###.#.#","#.#.......#.~~#~~~~~#.#...#...#","#.#######.#.#~###########.###.#","#.#...#...#.#.........#.....#.#","#.###.#.#.#.#######.#.#.#####.#","#.....#.#.#...#.#...#...#.....#","#####.#.#####.#.#.#######.#####","#.....#.........#.............#","###############################"]
+ENDSEC
+
+SECTION VIEWPORT
+  uid 1
+  tool bfs
+  title VP-01
+  rect 0.0 0.0 640.0 456.0
+  locked false
+  hidden false
+  param mud false
+  param speed 60.0
+ENDSEC
+
+SECTION VIEWPORT
+  uid 2
+  tool dijkstra
+  title VP-02
+  rect 720.0 0.0 640.0 456.0
+  locked false
+  hidden false
+  param mud false
+  param speed 60.0
+ENDSEC
+
+SECTION VIEWPORT
+  uid 3
+  tool a-star
+  title VP-03
+  rect 1440.0 0.0 640.0 456.0
+  locked false
+  hidden false
+  param mud false
+  param speed 60.0
+ENDSEC

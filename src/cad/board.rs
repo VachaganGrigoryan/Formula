@@ -201,33 +201,49 @@ impl Board {
                 title: v.title.clone(),
                 locked: v.locked,
                 hidden: v.hidden,
+                state: v.formula.save_state(),
             })
             .collect()
     }
 
-    /// Rebuild a board from a saved layout; unknown tools are skipped.
-    pub fn from_model(model: &[ViewportModel]) -> Self {
-        let mut board = Board::default();
+    /// Rebuild a board from a saved layout; unknown tools are skipped. The
+    /// shared data in `env` is what the formulas are built on.
+    pub fn from_model(model: &[ViewportModel], env: ToolEnv) -> Self {
+        let mut board = Board {
+            env,
+            ..Board::default()
+        };
         for m in model {
-            let Some(tool) = formulas::tool(&m.tool) else {
-                continue;
-            };
-            let formula = (tool.make)(&board.env);
-            let [x, y, w, h] = m.rect;
-            let size = vec2(w, h).max(formula.min_size());
-            board.viewports.push(Viewport {
-                uid: m.uid,
-                tool,
-                formula,
-                rect: Rect::from_min_size(pos2(x, y), size),
-                title: m.title.clone(),
-                locked: m.locked,
-                hidden: m.hidden,
-                born: f64::NEG_INFINITY,
-            });
-            board.next_uid = board.next_uid.max(m.uid + 1);
+            board.add_model(m, false, f64::NEG_INFINITY);
         }
         board
+    }
+
+    /// Place a saved viewport on top, with its formula's state restored.
+    /// `fresh_uid` gives it a new uid instead of the saved one (when it joins
+    /// a board that already has viewports, e.g. opening a sheet). `None` for
+    /// an unknown tool.
+    pub fn add_model(&mut self, m: &ViewportModel, fresh_uid: bool, now: f64) -> Option<u64> {
+        let tool = formulas::tool(&m.tool)?;
+        let mut formula = (tool.make)(&self.env);
+        if let Some(state) = &m.state {
+            formula.load_state(state);
+        }
+        let [x, y, w, h] = m.rect.map(|v| if v.is_finite() { v } else { 0.0 });
+        let size = vec2(w, h).max(formula.min_size());
+        let uid = if fresh_uid { self.next_uid } else { m.uid };
+        self.viewports.push(Viewport {
+            uid,
+            tool,
+            formula,
+            rect: Rect::from_min_size(pos2(x, y), size),
+            title: m.title.clone(),
+            locked: m.locked,
+            hidden: m.hidden,
+            born: now,
+        });
+        self.next_uid = self.next_uid.max(uid + 1);
+        Some(uid)
     }
 
     /// A first-launch sheet with a handful of formulas laid out in a grid.
@@ -264,7 +280,7 @@ impl Board {
     }
 }
 
-/// A viewport as saved between sessions (the formula's own state is not).
+/// A viewport as saved between sessions and in sheet files.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ViewportModel {
     pub uid: u64,
@@ -274,6 +290,10 @@ pub struct ViewportModel {
     pub title: String,
     pub locked: bool,
     pub hidden: bool,
+    /// The formula's own settings ([`Formula::save_state`]); absent in saves
+    /// from before formulas kept their state.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub state: Option<serde_json::Value>,
 }
 
 /// An alignment found while dragging: a line where an edge or center of the
@@ -418,7 +438,7 @@ mod tests {
         let model = b.to_model();
         let json = serde_json::to_string(&model).unwrap();
         let back: Vec<ViewportModel> = serde_json::from_str(&json).unwrap();
-        let b2 = Board::from_model(&back);
+        let b2 = Board::from_model(&back, ToolEnv::new());
         assert_eq!(b2.to_model(), model);
         // Demo viewports do not overlap.
         for (i, x) in b.viewports.iter().enumerate() {
@@ -431,6 +451,43 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn saves_from_before_formula_state_still_load() {
+        // A "board-v1" layout written before viewports carried `state`.
+        let old = r#"[
+            {"uid":1,"tool":"lorenz","rect":[0.0,0.0,640.0,480.0],"title":"VP-01","locked":false,"hidden":false},
+            {"uid":4,"tool":"gone-tool","rect":[700.0,0.0,640.0,480.0],"title":"VP-04","locked":true,"hidden":false},
+            {"uid":7,"tool":"bubble-sort","rect":[0.0,600.0,640.0,480.0],"title":"VP-07","locked":false,"hidden":true}
+        ]"#;
+        let model: Vec<ViewportModel> = serde_json::from_str(old).unwrap();
+        assert!(model.iter().all(|m| m.state.is_none()));
+        let b = Board::from_model(&model, ToolEnv::new());
+        let ids: Vec<&str> = b.viewports.iter().map(|v| v.tool.id).collect();
+        assert_eq!(ids, ["lorenz", "bubble-sort"]);
+        assert!(b.viewports[1].hidden);
+        // New viewports get uids after the largest saved one.
+        let mut b = b;
+        assert_eq!(b.add(tool("lerp"), Pos2::ZERO, Vec2::ZERO, 0.0), 8);
+    }
+
+    #[test]
+    fn add_model_restores_state_and_can_take_a_fresh_uid() {
+        let mut b = Board::default();
+        let uid = b.add(tool("expression"), Pos2::ZERO, Vec2::ZERO, 0.0);
+        b.get_mut(uid)
+            .unwrap()
+            .formula
+            .load_state(&serde_json::json!({"rows": ["y = 3x"]}));
+        let m = b.to_model().remove(0);
+        assert!(m.state.is_some());
+        let copy = b.add_model(&m, true, 0.0).unwrap();
+        assert_ne!(copy, uid);
+        assert_eq!(b.get(copy).unwrap().formula.save_state(), m.state);
+        let mut bad = m.clone();
+        bad.tool = "nope".into();
+        assert_eq!(b.add_model(&bad, true, 0.0), None);
     }
 
     #[test]

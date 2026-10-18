@@ -93,7 +93,32 @@ fn bar_rect(chart: Rect, i: usize, n: usize) -> Rect {
     )
 }
 
+/// What a sheet saves of a [`Normalize`].
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct State {
+    /// The data is drawn from this seed.
+    seed: u64,
+    outlier: f32,
+}
+
+impl Normalize {
+    fn state(&self) -> State {
+        State {
+            seed: self.seed,
+            outlier: self.outlier,
+        }
+    }
+
+    fn apply(&mut self, s: State) {
+        self.seed = s.seed;
+        self.regenerate();
+        self.outlier = s.outlier.clamp(0.0, 500.0);
+    }
+}
+
 impl Formula for Normalize {
+    crate::state_hooks!();
+
     fn substitutions(&self) -> Vec<Substitution> {
         let values = self.values();
         let Some(&x) = self.hovered.and_then(|i| values.get(i)).or(values.first()) else {

@@ -90,7 +90,8 @@ pub fn neighbors(poly: &[Corner]) -> impl Iterator<Item = usize> + '_ {
     poly.iter().filter_map(|&(_, n)| n)
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 enum Style {
     Colorful,
     Giraffe,
@@ -276,7 +277,60 @@ impl Voronoi {
     }
 }
 
+/// What a sheet saves of a [`Voronoi`].
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct State {
+    /// Seed positions in the unit square. Saved only while they stand still
+    /// (no drift or relaxation), since moving seeds change every frame.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    seeds: Option<Vec<[f32; 2]>>,
+    count: usize,
+    style: Style,
+    drift: bool,
+    relax: bool,
+    delaunay: bool,
+    show_seeds: bool,
+}
+
+impl Voronoi {
+    fn state(&self) -> State {
+        State {
+            seeds: (!self.drift && !self.relax)
+                .then(|| self.seeds.iter().map(|s| [s.at.x, s.at.y]).collect()),
+            count: self.count,
+            style: self.style,
+            drift: self.drift,
+            relax: self.relax,
+            delaunay: self.delaunay,
+            show_seeds: self.show_seeds,
+        }
+    }
+
+    fn apply(&mut self, s: State) {
+        self.count = s.count.clamp(2, 150);
+        let at: Vec<Pos2> = s
+            .seeds
+            .unwrap_or_default()
+            .iter()
+            .take(150)
+            .map(|p| pos2(p[0].clamp(0.0, 1.0), p[1].clamp(0.0, 1.0)))
+            .collect();
+        if at.len() >= 2 {
+            self.seeds = at.into_iter().map(|p| self.new_seed(p)).collect();
+        } else if self.seeds.len() != self.count {
+            self.scatter();
+        }
+        self.style = s.style;
+        self.drift = s.drift;
+        self.relax = s.relax;
+        self.delaunay = s.delaunay;
+        self.show_seeds = s.show_seeds;
+    }
+}
+
 impl Formula for Voronoi {
+    crate::state_hooks!();
+
     fn id(&self) -> &'static str {
         "voronoi"
     }

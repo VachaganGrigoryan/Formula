@@ -10,6 +10,9 @@ use crate::rng::Rng;
 
 pub type Point = [f32; 2];
 
+/// The most points a sheet can load.
+const MAX_POINTS: usize = 500;
+
 /// `d = √((x₂ − x₁)² + (y₂ − y₁)²)`
 pub fn distance(a: Point, b: Point) -> f32 {
     ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2)).sqrt()
@@ -62,7 +65,8 @@ pub fn kmeans_step(points: &[Point], centroids: &mut [Point]) -> (Vec<usize>, bo
 const W: f32 = 100.0;
 const H: f32 = 60.0;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 enum Mode {
     Nearest,
     KMeans,
@@ -183,7 +187,45 @@ fn cluster_colors(p: &Palette) -> [Color32; 6] {
     ]
 }
 
+/// What a sheet saves of a [`Distance`].
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct State {
+    mode: Mode,
+    points: Vec<Point>,
+    seed: u64,
+    k: usize,
+    auto: bool,
+}
+
+impl Distance {
+    fn state(&self) -> State {
+        State {
+            mode: self.mode,
+            points: self.points.clone(),
+            seed: self.seed,
+            k: self.k,
+            auto: self.auto,
+        }
+    }
+
+    fn apply(&mut self, s: State) {
+        self.mode = s.mode;
+        self.points = s
+            .points
+            .iter()
+            .take(MAX_POINTS)
+            .map(|p| [p[0].clamp(0.0, W), p[1].clamp(0.0, H)])
+            .collect();
+        self.k = s.k.clamp(2, 6);
+        self.auto = s.auto;
+        self.restart_kmeans();
+        self.seed = s.seed;
+    }
+}
+
 impl Formula for Distance {
+    crate::state_hooks!();
+
     fn derivations(&self) -> Vec<Derivation> {
         let m = MathText::new;
         vec![Derivation::new(
@@ -523,6 +565,22 @@ impl Formula for Distance {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn moved_points_survive_a_save() {
+        let d = Distance {
+            points: vec![[10.0, 10.0], [50.0, 30.0], [90.0, 55.0]],
+            ..Default::default()
+        };
+        let saved = d.save_state().unwrap();
+        let mut back = Distance::default();
+        back.load_state(&saved);
+        assert_eq!(back.points, d.points);
+        assert_eq!(back.assign.len(), 3);
+        // Points off the plot are pulled back onto it.
+        back.load_state(&serde_json::json!({"points": [[1e6, -4.0]]}));
+        assert_eq!(back.points, [[W, 0.0]]);
+    }
 
     #[test]
     fn three_four_five() {

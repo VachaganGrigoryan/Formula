@@ -17,7 +17,8 @@ pub fn to_polar(x: f32, y: f32) -> (f32, f32) {
     (x.hypot(y), y.atan2(x).rem_euclid(TAU))
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 enum Mode {
     Point,
     Rose,
@@ -62,7 +63,47 @@ fn geometry(rect: Rect) -> (Pos2, f32) {
     )
 }
 
+/// What a sheet saves of a [`Polar`].
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct State {
+    mode: Mode,
+    r: f32,
+    /// Saved only while it is not animating, so a running animation does
+    /// not count as an unsaved change.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    theta: Option<f32>,
+    petals: u32,
+    playing: bool,
+    speed: u32,
+}
+
+impl Polar {
+    fn state(&self) -> State {
+        State {
+            mode: self.mode,
+            r: self.r,
+            theta: (!self.playing).then_some(self.theta),
+            petals: self.petals,
+            playing: self.playing,
+            speed: self.speed,
+        }
+    }
+
+    fn apply(&mut self, s: State) {
+        self.mode = s.mode;
+        self.r = s.r.clamp(0.0, 1.0);
+        if let Some(theta) = s.theta {
+            self.theta = theta.rem_euclid(TAU);
+        }
+        self.petals = s.petals.clamp(1, 9);
+        self.playing = s.playing;
+        self.speed = s.speed.clamp(1, 10);
+    }
+}
+
 impl Formula for Polar {
+    crate::state_hooks!();
+
     fn derivations(&self) -> Vec<Derivation> {
         let m = MathText::new;
         vec![Derivation::new(

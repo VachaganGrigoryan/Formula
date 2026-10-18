@@ -52,7 +52,9 @@ impl Session {
             .spacing([12.0, 10.0])
             .show(ui, |ui| {
                 ui.label("List size");
-                changed |= ui.add(egui::Slider::new(&mut data.n, 5..=200)).changed();
+                changed |= ui
+                    .add(egui::Slider::new(&mut data.n, data::MIN_N..=data::MAX_N))
+                    .changed();
                 ui.end_row();
                 ui.label("Data");
                 ui.horizontal_wrapped(|ui| {
@@ -497,7 +499,30 @@ fn slot_x(area: Rect, n: usize, i: f32) -> f32 {
     area.left() + area.width() / n.max(1) as f32 * i
 }
 
+/// What a sheet saves of a [`SortVisualizer`].
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct Saved {
+    /// Steps per second.
+    speed: f32,
+}
+
+impl SortVisualizer {
+    fn state(&self) -> Saved {
+        Saved {
+            speed: self.player.speed,
+        }
+    }
+
+    fn apply(&mut self, s: Saved) {
+        // Record first, so the recording's own pace does not replace the speed.
+        self.sync();
+        self.player.speed = s.speed.clamp(1.0, 5000.0);
+    }
+}
+
 impl Formula for SortVisualizer {
+    crate::state_hooks!(Saved);
+
     fn id(&self) -> &'static str {
         self.info.id
     }
