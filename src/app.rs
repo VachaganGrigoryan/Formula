@@ -269,6 +269,7 @@ impl eframe::App for FormulaApp {
                 self.ws.show(ui, &chrome, &palette);
             });
         chrome::help_window(ui.ctx(), &mut self.panels, &chrome);
+        chrome::save_as_window(ui.ctx(), &mut self.ws, &chrome);
         self.ws.run_file_request();
         self.update_title(ui.ctx());
 

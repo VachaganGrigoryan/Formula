@@ -41,6 +41,14 @@ pub fn with_extension(name: &str) -> String {
     }
 }
 
+/// The file name to download a sheet under, from what was typed in the web
+/// Save As window: no folders, and the sheet extension. `None` when empty.
+pub fn download_name(input: &str) -> Option<String> {
+    let name = file_name(input.trim());
+    let name = name.trim();
+    (!name.is_empty()).then(|| with_extension(name))
+}
+
 /// Where `save [name]` writes. A bare name goes in `exports/sheets/`, like
 /// the other exports; a path is used as given. Without a name: the current
 /// file, else `exports/sheets/untitled.fwb`.
@@ -179,6 +187,16 @@ mod tests {
         remove_recent(&mut list, "5.fwb");
         assert!(!list.contains(&"5.fwb".to_owned()));
         assert_eq!(list.len(), RECENT_MAX - 1);
+    }
+
+    #[test]
+    fn download_names() {
+        assert_eq!(download_name("  lesson ").as_deref(), Some("lesson.fwb"));
+        assert_eq!(download_name("a/b.fwb").as_deref(), Some("b.fwb"));
+        assert_eq!(download_name("x.FWB").as_deref(), Some("x.FWB"));
+        assert_eq!(download_name(""), None);
+        assert_eq!(download_name("   "), None);
+        assert_eq!(download_name("dir/"), None);
     }
 
     #[test]

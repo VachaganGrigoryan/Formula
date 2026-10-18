@@ -192,6 +192,8 @@ pub struct Workspace {
     /// The current sheet file, its saved state and the Recent list.
     pub files: Files,
     pub file_request: Option<FileRequest>,
+    /// The name being typed in the web Save As window, while it is open.
+    pub save_prompt: Option<String>,
     gesture: Option<Gesture>,
     panning: bool,
     now: f64,
@@ -215,6 +217,7 @@ impl Workspace {
             ui_changed: false,
             files: Files::default(),
             file_request: None,
+            save_prompt: None,
             gesture: None,
             panning: false,
             now: 0.0,
@@ -305,6 +308,11 @@ impl Workspace {
         self.camera = Camera::default();
         self.camera.center = sheet.camera.center;
         self.camera.zoom = sheet.camera.zoom;
+        // Saved on a larger screen, the view may miss some viewports here.
+        let seen = self.camera.rect_to_world(self.view, self.view);
+        if self.board.bounds().is_some_and(|b| !seen.contains_rect(b)) {
+            self.fit_all();
+        }
         self.settings = sheet.settings;
         self.ui = sheet.ui;
         self.ui_changed = true;
@@ -429,15 +437,15 @@ impl Workspace {
                     self.save_to(&path);
                 }
             }
-            // The browser asks where to put downloads itself.
+            // The browser has no save dialog: ask for a name, then download.
             #[cfg(target_arch = "wasm32")]
             FileRequest::SaveAs => {
                 let name = self
                     .files
                     .path
                     .as_deref()
-                    .map_or_else(|| "untitled.fwb".to_owned(), files::file_name);
-                self.save_to(&name);
+                    .map_or_else(|| "untitled".to_owned(), files::file_name);
+                self.save_prompt = Some(name);
             }
         }
     }
@@ -1930,6 +1938,22 @@ mod tests {
             );
         }
         assert!(!ws.ui_changed);
+    }
+
+    #[test]
+    fn a_sheet_whose_view_misses_the_screen_zooms_to_fit() {
+        let sheet = |center: &str| {
+            format!(
+                "FWB 1\nSECTION CAMERA\n  center {center}\n  zoom 0.5\nENDSEC\nSECTION VIEWPORT\n  tool lerp\n  rect 0 0 640 400\nENDSEC\n"
+            )
+        };
+        let mut ws = workspace();
+        assert!(ws.open_text("fits.fwb", &sheet("320 200")));
+        assert!(!ws.camera.is_moving());
+        assert_eq!(ws.camera.center, pos2(320.0, 200.0));
+        let mut ws = workspace();
+        assert!(ws.open_text("elsewhere.fwb", &sheet("9000 9000")));
+        assert!(ws.camera.is_moving());
     }
 
     #[test]

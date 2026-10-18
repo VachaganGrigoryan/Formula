@@ -90,9 +90,11 @@ canvas settings and the panels.
 - **Command line:** `open path/to/lesson.fwb`, `open` (shows the dialog), `save` (to the current
   file, else `exports/sheets/untitled.fwb`) and `save lesson` (to `exports/sheets/lesson.fwb`).
 - **Drag and drop** a `.fwb` file onto the window to open it.
-- In the browser, Save downloads the sheet.
+- In the browser, Save downloads the sheet, and Save As first asks for a file name.
 
-Opening a sheet replaces the board and can be undone in one step. The title bar shows the file
+Opening a sheet replaces the board and can be undone in one step. A sheet keeps its saved view,
+unless that view would leave viewports off screen (say, a sheet saved on a larger monitor); then
+it zooms to fit. Duplicate (Ctrl+D) copies a viewport together with its settings. The title bar shows the file
 name, with a dot (•) while there are unsaved changes. Panning, zooming and switching tabs don't
 count as changes, and neither does a running animation. A sheet from a newer version of the app, or
 a damaged file, is refused with the line number and the board is kept. Unknown tools, sections,
