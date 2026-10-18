@@ -1,6 +1,6 @@
 //! Canonical, re-parseable text for an expression.
 
-use super::ast::{BinOp, Definition, Expr};
+use super::ast::{BinOp, Definition, Expr, Func};
 use crate::formula::{MathText, Tone};
 use std::fmt::Write;
 
@@ -139,7 +139,7 @@ impl Typeset<'_> {
                 None => self.text(n, hot),
             },
             Expr::Neg(a) => {
-                self.text("-", hot);
+                self.text("−", hot);
                 self.child(a, 0, prec(a) < 4, true, path, hot);
             }
             Expr::Bin(BinOp::Pow, base, exp) => {
@@ -168,7 +168,7 @@ impl Typeset<'_> {
                 self.child(l, 0, prec(l) < p, false, path, hot);
                 let sep = match op {
                     BinOp::Add => " + ",
-                    BinOp::Sub => " - ",
+                    BinOp::Sub => " − ",
                     BinOp::Div => " / ",
                     // `2x`, `a b`, but `x · 2` so two numbers never run together.
                     BinOp::Mul => match (&**l, &**r) {
@@ -182,7 +182,8 @@ impl Typeset<'_> {
                 self.child(r, 1, prec(r) <= p, true, path, hot);
             }
             Expr::Call(f, args) => {
-                self.text(&format!("{}(", f.name()), hot);
+                let name = if *f == Func::Sqrt { "√" } else { f.name() };
+                self.text(&format!("{name}("), hot);
                 for (i, a) in args.iter().enumerate() {
                     if i > 0 {
                         self.text(", ", hot);
@@ -225,7 +226,11 @@ pub fn number(v: f64) -> String {
         return "undefined".into();
     }
     if v.is_infinite() {
-        return if v > 0.0 { "∞".into() } else { "-∞".into() };
+        return if v > 0.0 {
+            "∞".into()
+        } else {
+            "−∞".into()
+        };
     }
     if v == 0.0 {
         return "0".into();
@@ -240,11 +245,11 @@ pub fn number(v: f64) -> String {
     if !(1e-4..1e6).contains(&v.abs()) {
         let s = format!("{v:.3e}");
         let (mantissa, exponent) = s.split_once('e').unwrap_or((&s, "0"));
-        return format!("{}e{exponent}", trim(mantissa.to_string()));
+        return format!("{}e{exponent}", trim(mantissa.to_string())).replace('-', "−");
     }
     let digits = v.abs().log10().floor() as i32 + 1;
     let decimals = (4 - digits).max(0) as usize;
-    trim(format!("{v:.decimals$}"))
+    trim(format!("{v:.decimals$}")).replace('-', "−")
 }
 
 /// The definition typeset for the Inspector and LaTeX export: implicit
@@ -310,7 +315,7 @@ mod tests {
         assert_eq!(text("r = 1 + cos(3θ)"), "r = 1 + cos(3θ)");
         assert_eq!(text("(cos t, sin t)"), "(cos(t), sin(t))");
         assert_eq!(text("x*2"), "y = x · 2");
-        assert_eq!(text("-(x+1)/2"), "y = -(x + 1) / 2");
+        assert_eq!(text("-(x+1)/2"), "y = −(x + 1) / 2");
     }
 
     #[test]

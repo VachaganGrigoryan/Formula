@@ -298,7 +298,7 @@ mod tests {
             .iter()
             .map(|s| expr::expr_math(&s.expr, None).text())
             .collect();
-        assert_eq!(texts, ["-(1 + 1) · 2", "-2 · 2", "-4"]);
+        assert_eq!(texts, ["−(1 + 1) · 2", "−2 · 2", "−4"]);
     }
 
     #[test]
