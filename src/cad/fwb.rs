@@ -132,7 +132,8 @@ fn is_section_name(s: &str) -> bool {
 }
 
 /// A value as written in a sheet: a list of two or more numbers or booleans
-/// as its items separated by spaces, anything else as compact JSON.
+/// as its items separated by spaces, a simple word without quotes, anything
+/// else as compact JSON.
 pub fn encode(v: &Value) -> String {
     match v {
         Value::Array(items)
@@ -144,8 +145,18 @@ pub fn encode(v: &Value) -> String {
                 .collect::<Vec<_>>()
                 .join(" ")
         }
+        Value::String(word) if is_bare_word(word) => word.clone(),
         _ => v.to_string(),
     }
+}
+
+/// A string that can be written without quotes: letters, digits, `-`, `_`
+/// and `.`, and not something that would read back as a number or a keyword.
+fn is_bare_word(s: &str) -> bool {
+    !s.is_empty()
+        && s.chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+        && serde_json::from_str::<Value>(s).is_err()
 }
 
 /// Read what [`encode`] wrote: one JSON value, else space-separated JSON
@@ -322,6 +333,11 @@ mod tests {
             (json!([[0, 0], [1.5, 2]]), "[[0,0],[1.5,2]]"),
             (json!(["a b", "c"]), r#"["a b","c"]"#),
             (json!({"k": [1, 2]}), r#"{"k":[1,2]}"#),
+            (json!("dark"), "dark"),
+            (json!("VP-01"), "VP-01"),
+            (json!("true"), r#""true""#),
+            (json!("3"), r#""3""#),
+            (json!(""), r#""""#),
         ];
         for (v, text) in cases {
             assert_eq!(encode(&v), text);

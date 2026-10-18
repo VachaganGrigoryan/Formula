@@ -113,6 +113,14 @@ pub fn menu_bar(ui: &mut egui::Ui, ws: &mut Workspace, p: &mut Panels) {
                     }
                 }
             });
+            ui.menu_button("Examples", |ui| {
+                for (title, text) in super::sheet::examples() {
+                    if ui.button(&title).clicked() {
+                        ws.open_example(&title, text);
+                        ui.close();
+                    }
+                }
+            });
             ui.separator();
             if ui.button("Demo sheet").clicked() {
                 ws.run_command("clear");

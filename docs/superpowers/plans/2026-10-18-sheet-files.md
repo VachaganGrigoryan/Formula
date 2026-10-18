@@ -458,3 +458,31 @@ Commit: `Add example sheets and document sheet files`.
 
    The user does the native smoke test if dialogs can't be driven here.
 4. Push, then open the PR. The user reviews and merges.
+
+---
+
+## Rulings made while building
+
+- **Floats parse exactly.** serde_json's `float_roundtrip` feature (of an existing dependency)
+  makes f64 values come back bit for bit. Without it, `-983.8800048828125` read back one ulp off.
+- **f32 settings are written short.** `state::to_value` goes through `to_string`, so a sheet says
+  `0.78`, not `0.7799999713897705`.
+- **Animated values are saved only while paused.** Examples: lerp, bezier and pythagoras `t`;
+  polar and euler `θ`; a spinning `yaw`; Lissajous `delta` while drifting; Life cells while
+  running; Voronoi seeds while moving; easing's seed while looping. Each is an `Option` field
+  skipped while running. Replay tools don't save `playing`. Without this, any running animation
+  would mark the sheet unsaved. A test runs every tool for 30 frames and checks its saved state
+  doesn't change.
+- **`Formula::state_params`** lists every field a formula loads, including the skipped `Option`s,
+  read from the serde struct through a small field-recording deserializer. Sheets warn about any
+  `param` not on that list.
+- **`state::merge` also takes fields that the current state leaves out.** Unknown fields
+  deserialize and are ignored.
+- **Bare words and default shared data.**
+  - Simple words are written unquoted (`tool lerp`, `theme dark`), as in the roadmap's example.
+  - SHARED holds only data that differs from a new board's.
+  - When reading, missing SHARED entries are a new board's, so opening a sheet gives the same board
+    every time.
+- **Example sheets open with `fit_all`** and are not a current file, so Save asks where to save.
+- **Force layout** saves its seed and regenerates the graph only when the seed changes. Shuffled
+  positions are not saved; the layout settles again anyway.

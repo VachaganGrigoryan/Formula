@@ -442,6 +442,16 @@ impl Workspace {
         }
     }
 
+    /// Open one of the built-in example sheets. It is not a file, so Save
+    /// asks where to put it.
+    pub fn open_example(&mut self, title: &str, text: &str) {
+        if self.open_text(title, text) {
+            self.files.path = None;
+            self.mark_saved();
+            self.fit_all();
+        }
+    }
+
     /// An empty sheet with no file.
     pub fn new_sheet(&mut self) {
         self.board.selection = self.board.viewports.iter().map(|v| v.uid).collect();

@@ -103,10 +103,11 @@ impl ToolEnv {
             points: graph.points().to_vec(),
             seed: graph.seed(),
         };
+        let short = |v: Option<Value>| v.unwrap_or(Value::Null);
         let mut map = Map::new();
-        map.insert("sorting".into(), json!(sorting));
+        map.insert("sorting".into(), short(crate::state::to_value(&sorting)));
         map.insert("grid".into(), json!(self.graphs.grid.borrow().to_rows()));
-        map.insert("graph".into(), json!(graph));
+        map.insert("graph".into(), short(crate::state::to_value(&graph)));
         map
     }
 

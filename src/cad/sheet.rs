@@ -18,6 +18,24 @@ use super::inspector::Tab;
 use crate::content::Lang;
 use crate::formulas::{self, ToolEnv};
 
+// `SHEETS`: the example sheets in `assets/sheets/`, embedded by build.rs.
+include!(concat!(env!("OUT_DIR"), "/sheets.rs"));
+
+/// The example sheets as (title, text), for File > Examples. The title is
+/// the sheet's own, else its file name.
+pub fn examples() -> Vec<(String, &'static str)> {
+    SHEETS
+        .iter()
+        .map(|(file, text)| {
+            let title = from_text(text)
+                .ok()
+                .and_then(|(s, _)| s.title)
+                .unwrap_or_else(|| (*file).to_owned());
+            (title, *text)
+        })
+        .collect()
+}
+
 /// The panels around the canvas.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct UiState {
@@ -89,9 +107,9 @@ pub fn to_text(sheet: &Sheet) -> String {
     let mut camera = Section::new("CAMERA");
     camera.push(
         "center",
-        &json!([sheet.camera.center.x, sheet.camera.center.y]),
+        &short(&[sheet.camera.center.x, sheet.camera.center.y]),
     );
-    camera.push("zoom", &json!(sheet.camera.zoom));
+    camera.push("zoom", &short(&sheet.camera.zoom));
     doc.sections.push(camera);
 
     let mut settings = Section::new("SETTINGS");
@@ -111,9 +129,16 @@ pub fn to_text(sheet: &Sheet) -> String {
     s.push("lang", &json!(name_of(&LANGS, ui.lang)));
     doc.sections.push(s);
 
-    if !sheet.shared.is_empty() {
+    // Only shared data that differs from a new board's.
+    let defaults = ToolEnv::new().save_state();
+    let changed: Vec<_> = sheet
+        .shared
+        .iter()
+        .filter(|(k, v)| defaults.get(*k) != Some(*v))
+        .collect();
+    if !changed.is_empty() {
         let mut shared = Section::new("SHARED");
-        for (k, v) in &sheet.shared {
+        for (k, v) in changed {
             shared.push(k, v);
         }
         doc.sections.push(shared);
@@ -124,7 +149,7 @@ pub fn to_text(sheet: &Sheet) -> String {
         vp.push("uid", &json!(m.uid));
         vp.push("tool", &json!(m.tool));
         vp.push("title", &json!(m.title));
-        vp.push("rect", &json!(m.rect));
+        vp.push("rect", &short(&m.rect));
         vp.push("locked", &json!(m.locked));
         vp.push("hidden", &json!(m.hidden));
         if let Some(Value::Object(state)) = &m.state {
@@ -142,8 +167,10 @@ pub fn to_text(sheet: &Sheet) -> String {
 pub fn from_text(text: &str) -> Result<(Sheet, Vec<String>), FwbError> {
     let doc = migrate(fwb::read(text)?);
     let mut sheet = Sheet::default();
-    let mut warnings = Vec::new();
+    // Shared data the sheet leaves out is a new board's.
     let shared_keys = ToolEnv::new().save_state();
+    sheet.shared = shared_keys.clone();
+    let mut warnings = Vec::new();
 
     for section in &doc.sections {
         match section.name.as_str() {
@@ -328,6 +355,11 @@ fn warn(warnings: &mut Vec<String>, e: &Entry, what: &str) {
     warnings.push(format!("line {}: {what}", e.line));
 }
 
+/// `v` as JSON with `f32`s in their shortest form.
+fn short<T: serde::Serialize>(v: &T) -> Value {
+    crate::state::to_value(v).unwrap_or(Value::Null)
+}
+
 /// `N` finite numbers from a list.
 fn numbers<const N: usize>(v: &Value) -> Option<[f32; N]> {
     let items = v.as_array()?;
@@ -437,9 +469,33 @@ mod tests {
     }
 
     #[test]
+    fn every_example_opens_without_warnings() {
+        assert_eq!(SHEETS.len(), 3);
+        let ctx = egui::Context::default();
+        let mut out = ctx.run_ui(Default::default(), |_| {});
+        out.textures_delta.clear();
+        let font = egui::FontId::proportional(14.0);
+        for ((file, text), (title, _)) in SHEETS.iter().zip(examples()) {
+            let (sheet, warnings) = from_text(text).unwrap();
+            assert!(warnings.is_empty(), "{file}: {warnings:?}");
+            assert!(!sheet.viewports.is_empty(), "{file}");
+            assert_eq!(sheet.title.as_deref(), Some(title.as_str()), "{file}");
+            for c in title.chars() {
+                assert!(ctx.fonts_mut(|f| f.has_glyph(&font, c)), "{file}: {c:?}");
+            }
+        }
+    }
+
+    #[test]
     fn an_empty_sheet_is_valid() {
         let (sheet, warnings) = from_text("FWB 1\n").unwrap();
         assert!(warnings.is_empty());
-        assert_eq!(sheet, Sheet::default());
+        assert_eq!(
+            sheet,
+            Sheet {
+                shared: ToolEnv::new().save_state(),
+                ..Sheet::default()
+            }
+        );
     }
 }

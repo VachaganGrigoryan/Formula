@@ -1,0 +1,74 @@
+FWB 1
+; Formula Workbench sheet
+
+SECTION HEADER
+  app 0.1.0
+  title "Sorting showdown"
+ENDSEC
+
+SECTION CAMERA
+  center 680.0 479.0
+  zoom 0.79
+ENDSEC
+
+SECTION SETTINGS
+  animate_all true
+  grid true
+  minimap true
+  ortho false
+  rulers true
+  snap true
+ENDSEC
+
+SECTION UI
+  theme dark
+  browser true
+  inspector true
+  tab properties
+  lang python
+ENDSEC
+
+SECTION SHARED
+  sorting {"dist":"nearly_sorted","n":60,"seed":3,"skin":"bars"}
+ENDSEC
+
+SECTION VIEWPORT
+  uid 1
+  tool bubble-sort
+  title VP-01
+  rect 0.0 0.0 640.0 372.0
+  locked false
+  hidden false
+  param speed 80
+ENDSEC
+
+SECTION VIEWPORT
+  uid 2
+  tool insertion-sort
+  title VP-02
+  rect 720.0 0.0 640.0 372.0
+  locked false
+  hidden false
+  param speed 40
+ENDSEC
+
+SECTION VIEWPORT
+  uid 3
+  tool quick-sort
+  title VP-03
+  rect 0.0 452.0 640.0 372.0
+  locked false
+  hidden false
+  param speed 90
+ENDSEC
+
+SECTION VIEWPORT
+  uid 4
+  tool sorting-race
+  title VP-04
+  rect 720.0 452.0 640.0 506.0
+  locked false
+  hidden false
+  param chosen ["bubble","insertion","merge","quick","heap"]
+  param speed 60.0
+ENDSEC
