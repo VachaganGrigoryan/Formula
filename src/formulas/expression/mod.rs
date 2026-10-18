@@ -1,6 +1,7 @@
 //! The expression plotter: type `y = ...`, `r = ...` or `(x(t), y(t))` and
 //! get a live plot with a slider for every free parameter.
 
+pub mod export;
 pub mod plot;
 
 use std::collections::BTreeMap;
@@ -9,6 +10,7 @@ use std::f64::consts::TAU;
 use egui::{Align2, Color32, FontId, Pos2, Rect, RichText, Sense, Shape, Stroke, pos2, vec2};
 use serde_json::{Value, json};
 
+use crate::content::{self, Lang};
 use crate::expr::{self, Definition, Expr, ParseError};
 use crate::formula::{Formula, MathText, Palette};
 use plot::{View, nice_step, sample_curve, sample_explicit};
@@ -481,6 +483,17 @@ impl Formula for Expression {
                     ui.end_row();
                 }
             });
+    }
+
+    fn export_code(&self, lang: Lang) -> Option<String> {
+        let template = content::code(self.id(), lang)?;
+        Some(export::fill(
+            template,
+            &[
+                ("PARAMS", export::params(self, lang)),
+                ("EXPRESSIONS", export::expressions(self, lang)),
+            ],
+        ))
     }
 
     fn save_state(&self) -> Option<Value> {

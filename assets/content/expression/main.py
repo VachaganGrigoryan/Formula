@@ -48,10 +48,10 @@ def parametric(fx, fy, t0, t1):
     return full(fx(t), t), full(fy(t), t)
 
 
-def curves(p, xs):
+def curves(vals, xs):
     """Every row as an (x, y) pair of arrays; xs spans the view."""
 # @EXPRESSIONS
-    a, b, k = p["a"], p["b"], p["k"]
+    a, b, k = vals["a"], vals["b"], vals["k"]
 
     def row1(x):
         return a * np.sin(b * x)

@@ -46,11 +46,11 @@ fn polar(r: f64, theta: f64) -> (f64, f64) {
 }
 
 /// Every row of the plot, for the current parameter values.
-fn rows(p: &[Param]) -> Vec<Row> {
+fn rows(vals: &[Param]) -> Vec<Row> {
 // @EXPRESSIONS
-    let a = value(p, "a");
-    let b = value(p, "b");
-    let k = value(p, "k");
+    let a = value(vals, "a");
+    let b = value(vals, "b");
+    let k = value(vals, "k");
     vec![
         Row::Explicit(Box::new(move |x: f64| a * (b * x).sin())),
         Row::Curve(Box::new(move |theta: f64| polar(1.0 + (k * theta).cos(), theta)), 0.0, 6.283185307179586),

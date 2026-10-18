@@ -27,9 +27,9 @@ function polar(r: number, theta: number): [number, number] {
 }
 
 /** Every row of the plot, for the current parameter values. */
-function rows(p: Params): Row[] {
+function rows(vals: Params): Row[] {
 // @EXPRESSIONS
-  const { a, b, k } = p;
+  const { a, b, k } = vals;
   return [
     { kind: "explicit", f: (x: number) => a * Math.sin(b * x) },
     { kind: "curve", f: (theta: number) => polar(1 + Math.cos(k * theta), theta), t0: 0.0, t1: 6.283185307179586 },
