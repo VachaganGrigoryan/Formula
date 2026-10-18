@@ -408,6 +408,48 @@ impl Workspace {
         }
     }
 
+    /// Show the file dialog a command or shortcut asked for. Runs between
+    /// frames' drawing, from the app.
+    pub fn run_file_request(&mut self) {
+        let Some(request) = self.file_request.take() else {
+            return;
+        };
+        match request {
+            #[cfg(not(target_arch = "wasm32"))]
+            FileRequest::Open => {
+                if let Some(path) = files::pick_open() {
+                    self.open_path(&path);
+                }
+            }
+            #[cfg(target_arch = "wasm32")]
+            FileRequest::Open => files::pick_open(self.files.inbox.clone()),
+            #[cfg(not(target_arch = "wasm32"))]
+            FileRequest::SaveAs => {
+                if let Some(path) = files::pick_save(self.files.path.as_deref()) {
+                    self.save_to(&path);
+                }
+            }
+            // The browser asks where to put downloads itself.
+            #[cfg(target_arch = "wasm32")]
+            FileRequest::SaveAs => {
+                let name = self
+                    .files
+                    .path
+                    .as_deref()
+                    .map_or_else(|| "untitled.fwb".to_owned(), files::file_name);
+                self.save_to(&name);
+            }
+        }
+    }
+
+    /// An empty sheet with no file.
+    pub fn new_sheet(&mut self) {
+        self.board.selection = self.board.viewports.iter().map(|v| v.uid).collect();
+        self.delete_selection();
+        self.files.path = None;
+        self.mark_saved();
+    }
+
     /// The board as it is now counts as saved.
     pub fn mark_saved(&mut self) {
         let key = files::change_key(&self.sheet());
@@ -783,6 +825,14 @@ impl Workspace {
         }
         if pressed(cmd, Key::A) {
             self.select_all();
+        }
+        if pressed(cmd_shift, Key::S) {
+            self.file_request = Some(FileRequest::SaveAs);
+        } else if pressed(cmd, Key::S) {
+            self.save();
+        }
+        if pressed(cmd, Key::O) {
+            self.file_request = Some(FileRequest::Open);
         }
         if pressed(shift, Key::F) {
             self.focus_selection();
@@ -1795,6 +1845,42 @@ mod tests {
         assert!(ws.open_bytes("cells.fwb", text.as_bytes()));
         assert_eq!(ws.board.viewports[0].tool.id, "voronoi");
         assert_eq!(ws.files.title(), "cells.fwb");
+    }
+
+    #[test]
+    fn file_shortcuts_ask_for_dialogs() {
+        let mut ws = workspace();
+        let ctx = egui::Context::default();
+        let chrome = Chrome::graphite();
+        let palette = super::super::theme::palette(true);
+        let press = |ws: &mut Workspace, modifiers: Modifiers, key: Key| {
+            ws.file_request = None;
+            let mut input = egui::RawInput::default();
+            input.events.push(egui::Event::Key {
+                key,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers,
+            });
+            let mut out = ctx.run_ui(input, |ui| {
+                egui::CentralPanel::default().show(ui, |ui| ws.show(ui, &chrome, &palette));
+            });
+            out.textures_delta.clear();
+            ws.file_request
+        };
+        let (cmd, shift) = (Modifiers::COMMAND, Modifiers::SHIFT);
+        assert_eq!(press(&mut ws, cmd, Key::O), Some(FileRequest::Open));
+        assert_eq!(press(&mut ws, cmd, Key::S), Some(FileRequest::SaveAs));
+        assert_eq!(
+            press(&mut ws, cmd | shift, Key::S),
+            Some(FileRequest::SaveAs)
+        );
+        // With a file, Ctrl+S saves straight to it.
+        let path = temp_sheet("shortcut.fwb");
+        assert!(ws.save_to(&path));
+        assert_eq!(press(&mut ws, cmd, Key::S), None);
+        assert_eq!(ws.log.last().unwrap(), &format!("Saved {path}"));
     }
 
     #[test]

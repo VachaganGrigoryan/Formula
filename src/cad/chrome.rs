@@ -3,7 +3,7 @@
 
 use egui::{Color32, Frame, Key, Margin, RichText, ScrollArea, Stroke, TextEdit};
 
-use super::canvas::{Mode, Workspace};
+use super::canvas::{FileRequest, Mode, Workspace};
 use super::icons::{self, Ui as Icon};
 use super::theme::{Chrome, mono};
 use crate::formulas::{self, Tool};
@@ -66,9 +66,54 @@ pub fn menu_bar(ui: &mut egui::Ui, ws: &mut Workspace, p: &mut Panels) {
     egui::MenuBar::new().ui(ui, |ui| {
         ui.menu_button("File", |ui| {
             if ui.button("New sheet").clicked() {
-                ws.run_command("clear");
+                ws.new_sheet();
                 ui.close();
             }
+            if ui
+                .add(egui::Button::new("Open...").shortcut_text("Ctrl+O"))
+                .clicked()
+            {
+                ws.file_request = Some(FileRequest::Open);
+                ui.close();
+            }
+            if ui
+                .add(egui::Button::new("Save").shortcut_text("Ctrl+S"))
+                .clicked()
+            {
+                ws.save();
+                ui.close();
+            }
+            if ui
+                .add(egui::Button::new("Save As...").shortcut_text("Ctrl+Shift+S"))
+                .clicked()
+            {
+                ws.file_request = Some(FileRequest::SaveAs);
+                ui.close();
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            ui.menu_button("Recent", |ui| {
+                if ws.files.recent.is_empty() {
+                    ui.weak("No recent sheets");
+                }
+                for path in ws.files.recent.clone() {
+                    if ui
+                        .button(super::files::file_name(&path))
+                        .on_hover_text(&path)
+                        .clicked()
+                    {
+                        ws.open_path(&path);
+                        ui.close();
+                    }
+                }
+                if !ws.files.recent.is_empty() {
+                    ui.separator();
+                    if ui.button("Clear recent").clicked() {
+                        ws.files.recent.clear();
+                        ui.close();
+                    }
+                }
+            });
+            ui.separator();
             if ui.button("Demo sheet").clicked() {
                 ws.run_command("clear");
                 let demo = super::board::Board::demo(None);

@@ -70,6 +70,47 @@ pub fn change_key(sheet: &Sheet) -> String {
 #[cfg(target_arch = "wasm32")]
 pub type Inbox = std::rc::Rc<std::cell::RefCell<Option<(String, Result<Vec<u8>, String>)>>>;
 
+/// Ask for a sheet to open (desktop: blocks until the dialog closes).
+#[cfg(not(target_arch = "wasm32"))]
+pub fn pick_open() -> Option<String> {
+    rfd::FileDialog::new()
+        .set_title("Open sheet")
+        .add_filter("Formula sheet", &[SHEET_EXT])
+        .pick_file()
+        .map(|p| p.display().to_string())
+}
+
+/// Ask where to save the sheet, starting from the current file.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn pick_save(current: Option<&str>) -> Option<String> {
+    let mut dialog = rfd::FileDialog::new()
+        .set_title("Save sheet")
+        .add_filter("Formula sheet", &[SHEET_EXT])
+        .set_file_name(current.map_or_else(|| format!("untitled.{SHEET_EXT}"), file_name));
+    if let Some(dir) = current.and_then(|p| std::path::Path::new(p).parent())
+        && !dir.as_os_str().is_empty()
+    {
+        dialog = dialog.set_directory(dir);
+    }
+    dialog.save_file().map(|p| p.display().to_string())
+}
+
+/// Ask the browser for a sheet; its contents arrive in `inbox`.
+#[cfg(target_arch = "wasm32")]
+pub fn pick_open(inbox: Inbox) {
+    wasm_bindgen_futures::spawn_local(async move {
+        let picked = rfd::AsyncFileDialog::new()
+            .set_title("Open sheet")
+            .add_filter("Formula sheet", &[SHEET_EXT])
+            .pick_file()
+            .await;
+        if let Some(handle) = picked {
+            let bytes = handle.read().await;
+            *inbox.borrow_mut() = Some((handle.file_name(), Ok(bytes)));
+        }
+    });
+}
+
 #[derive(Default)]
 pub struct Files {
     /// The current sheet: a path on the desktop, a file name on the web.

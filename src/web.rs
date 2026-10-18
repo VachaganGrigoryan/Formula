@@ -51,3 +51,10 @@ pub fn show_in_url(id: &str) {
         let _ = history.replace_state_with_url(&JsValue::NULL, "", Some(&wanted));
     }
 }
+
+/// Show `title` in the browser tab.
+pub fn set_title(title: &str) {
+    if let Some(document) = web_sys::window().and_then(|w| w.document()) {
+        document.set_title(title);
+    }
+}
