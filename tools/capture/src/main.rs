@@ -13,21 +13,16 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use egui::{Pos2, Rect, Vec2, pos2, vec2};
+use egui::{Rect, Vec2, pos2, vec2};
 use egui_kittest::Harness;
 use formula::FormulaApp;
-use formula::cad::board::Board;
 use formula::cad::camera::Camera;
 use formula::cad::canvas::{Settings, Workspace};
 use formula::cad::inspector::Tab;
 use formula::cad::sheet;
-use formula::cad::theme::{self, Chrome};
-use formula::formula::Palette;
-use formula::formulas::{self, Tool};
-use image::RgbaImage;
+use formula::formulas;
+use formula_capture::{DT, board, crop, render, viewport, warmup};
 
-/// Seconds per frame. Formulas see it as `dt`.
-const DT: f32 = 1.0 / 60.0;
 /// Frames per second of the GIFs.
 const GIF_FPS: usize = 12;
 /// Tools shown as animations in the README, and each GIF's width.
@@ -39,110 +34,14 @@ const SHOWCASE: [(&str, u32); 6] = [
     ("game-of-life", 320),
     ("pythagorean-proof", 420),
 ];
-/// The pathfinding tools search the maze from this example sheet.
-const MAZE: &str = "Pathfinding lab";
 /// The tools on the hero board, row by row.
 const HERO: [&[&str]; 2] = [
     &["lorenz", "fourier-epicycles", "voronoi"],
     &["sorting-race", "a-star", "game-of-life"],
 ];
-/// Canvas around a viewport: room for its title tab and the frame.
-const PAD: Vec2 = vec2(16.0, 16.0);
-const TAB: f32 = 26.0;
-/// Extra canvas beyond the crop, so the title block lands outside it.
-const SLACK: f32 = 260.0;
-
-/// Seconds a tool runs before its still is taken.
-fn warmup(id: &str) -> f32 {
-    match id {
-        "fourier-epicycles" => 9.0,
-        "lorenz" | "flow-field" => 6.0,
-        "game-of-life" => 4.0,
-        id if id.ends_with("-sort") || id.ends_with("sort-3way") => 3.0,
-        "bfs" | "dfs" | "dijkstra" | "a-star" => 5.0,
-        "sorting-race" | "kruskal" | "prim" => 3.0,
-        "binary-search-tree" => 3.0,
-        _ => 1.5,
-    }
-}
-
-/// A board whose shared grid is the maze from the `MAZE` example sheet.
-fn board() -> Board {
-    let mut board = Board::default();
-    let (_, text) = sheet::examples()
-        .into_iter()
-        .find(|(title, _)| title == MAZE)
-        .expect("the pathfinding example sheet");
-    let (maze, _) = sheet::from_text(text).unwrap();
-    board.env.load_state(&maze.shared);
-    board
-}
-
-/// One viewport on an otherwise empty canvas.
-struct Stage {
-    ws: Workspace,
-    chrome: Chrome,
-    palette: Palette,
-    themed: bool,
-}
 
 fn steps(seconds: f32) -> usize {
-    (seconds / DT).round() as usize
-}
-
-/// A harness showing `tool` at its default size, and the part of the screen
-/// to keep: the viewport with its title tab.
-fn viewport(tool: &'static Tool) -> (Harness<'static, Stage>, Rect) {
-    let settings = Settings {
-        rulers: false,
-        minimap: false,
-        ..Settings::default()
-    };
-    let mut ws = Workspace::new(board(), Camera::default(), settings);
-    let uid = ws.place(tool, Some(Pos2::ZERO), Vec2::ZERO);
-    ws.board.selection.clear();
-    let rect = ws.board.get(uid).unwrap().rect;
-    ws.camera.center = rect.center();
-    let size = rect.size() + 2.0 * PAD + vec2(SLACK, SLACK + TAB);
-    let screen = Rect::from_min_size(Pos2::ZERO, size);
-    let shown = Rect::from_center_size(screen.center(), rect.size());
-    let crop = Rect::from_min_max(shown.min - PAD - vec2(0.0, TAB), shown.max + PAD);
-    let stage = Stage {
-        ws,
-        chrome: Chrome::graphite(),
-        palette: theme::palette(true),
-        themed: false,
-    };
-    let harness = Harness::builder()
-        .with_size(size)
-        .with_pixels_per_point(1.0)
-        .with_step_dt(DT)
-        .wgpu()
-        .build_ui_state(
-            |ui, s: &mut Stage| {
-                if !s.themed {
-                    theme::apply(ui.ctx(), true);
-                    s.themed = true;
-                }
-                egui::CentralPanel::default()
-                    .frame(egui::Frame::NONE)
-                    .show(ui, |ui| s.ws.show(ui, &s.chrome, &s.palette));
-            },
-            stage,
-        );
-    (harness, crop)
-}
-
-fn crop(image: &RgbaImage, r: Rect) -> RgbaImage {
-    let x = r.min.x.max(0.0) as u32;
-    let y = r.min.y.max(0.0) as u32;
-    let w = (r.width() as u32).min(image.width() - x);
-    let h = (r.height() as u32).min(image.height() - y);
-    image::imageops::crop_imm(image, x, y, w, h).to_image()
-}
-
-fn render<S>(h: &mut Harness<'_, S>) -> RgbaImage {
-    h.render().unwrap_or_else(|e| panic!("render failed: {e}"))
+    formula_capture::steps(seconds, DT)
 }
 
 /// Run `seconds`, keeping `GIF_FPS` frames a second, into a GIF `width` wide.
