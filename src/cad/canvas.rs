@@ -172,6 +172,9 @@ struct Hit {
 pub struct Workspace {
     pub board: Board,
     pub camera: Camera,
+    /// Draw the CAD title block in the canvas corner. Not saved; renderers
+    /// that show only part of the canvas turn it off.
+    pub title_block: bool,
     pub history: History,
     pub mode: Mode,
     pub settings: Settings,
@@ -222,6 +225,7 @@ impl Workspace {
             panning: false,
             now: 0.0,
             default_sizes: HashMap::new(),
+            title_block: true,
         }
     }
 
@@ -1499,19 +1503,21 @@ impl Workspace {
             overlay::minimap(&painter, map, m, &rects, visible, chrome);
         }
         let n = self.board.viewports.len();
-        overlay::title_block(
-            &painter,
-            view,
-            chrome,
-            [
-                "FORMULA WORKBENCH",
-                &format!(
-                    "SHEET 1 · {n} VIEWPORT{} · {}",
-                    if n == 1 { "" } else { "S" },
-                    overlay::today()
-                ),
-            ],
-        );
+        if self.title_block {
+            overlay::title_block(
+                &painter,
+                view,
+                chrome,
+                [
+                    "FORMULA WORKBENCH",
+                    &format!(
+                        "SHEET 1 · {n} VIEWPORT{} · {}",
+                        if n == 1 { "" } else { "S" },
+                        overlay::today()
+                    ),
+                ],
+            );
+        }
 
         let fading = self.board.viewports.iter().any(|v| now - v.born < 0.3);
         if animating || camera_moving || self.gesture.is_some() || fading || self.panning {

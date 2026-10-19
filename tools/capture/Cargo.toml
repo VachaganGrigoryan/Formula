@@ -4,9 +4,20 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
-# Renders the README's screenshots and GIFs (docs/media). Kept out of the main
-# crate so its wgpu renderer does not slow down `cargo test`.
+# Headless rendering of the workbench: the `formula_capture` library (a
+# workspace with one tool placed, a wgpu harness, cropping) and the
+# `formula-capture` binary that renders the README's screenshots and GIFs
+# (docs/media). Kept out of the main crate so its wgpu renderer does not slow
+# down `cargo test`.
 [workspace]
+
+[lib]
+name = "formula_capture"
+path = "src/lib.rs"
+
+[[bin]]
+name = "formula-capture"
+path = "src/main.rs"
 
 [dependencies]
 formula = { path = "../.." }

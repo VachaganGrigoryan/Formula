@@ -18,6 +18,7 @@ cargo test formulas::sorting                 # one module's tests
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo run --release --manifest-path tools/capture/Cargo.toml  # README media -> docs/media (needs ffmpeg)
+cargo test --release --manifest-path tools/capture/Cargo.toml # headless rendering lib tests
 ```
 
 Web build (the `wasm-bindgen` CLI version must match the `=0.2.129` pin in Cargo.toml/Cargo.lock):
@@ -93,6 +94,12 @@ cannot show dialogs, so they set `Workspace::file_request` and the app runs it. 
 save dialog, so on wasm Save As opens `chrome::save_as_window` (via `Workspace::save_prompt`) to ask
 for the download's name. `Board::duplicate` copies the formula's state. The example sheets
 in `assets/sheets/` are embedded by `build.rs` (`sheet::SHEETS`) and must open with no warnings.
+
+**Headless rendering.** `tools/capture` is a separate crate (its wgpu renderer stays out of
+`cargo test`): the `formula_capture` library (`workspace_with`, `viewport`, `render`, `crop`,
+`warmup`, `steps`) and the `formula-capture` binary that renders `docs/media`. Other renderers
+depend on that library and on `formula::{cad, formulas, formula, content}` through a git
+dependency, so keep their `pub` items stable; `Workspace::title_block` exists for them.
 
 **Exports.**
 - `src/latex.rs` converts `MathText` equations to LaTeX. Function words become operators, Greek
