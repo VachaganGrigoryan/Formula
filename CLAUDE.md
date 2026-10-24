@@ -29,6 +29,9 @@ wasm-bindgen --target web --no-typescript --out-dir pkg target/wasm32-unknown-un
 python3 -m http.server   # index.html loads ./pkg/formula.js; open http://localhost:8000/#<tool-id>
 ```
 
+`scripts/deploy-web.sh` publishes https://formula.vachagan.dev (ZimaOS, Caddy in `deploy/zimaos/`):
+`web/index.html` (landing) at `/`, `docs/media` at `/media/`, the app shell and `pkg/` at `/app/`.
+
 The crate is both `cdylib` (wasm) and `rlib`. `src/main.rs` is the native entry. `src/web.rs`
 (`#[wasm_bindgen(start)]`) is the browser entry. `web.rs` also syncs the selected tool to the URL
 `#id` so links can be shared. Code that is only for wasm or only for native goes behind
@@ -163,8 +166,9 @@ the glyph test and the ASCII-LaTeX test. The proof tools live in `formulas/proof
    `state_round_trips`, `flipped_toggles_survive`, `hostile_state_is_clamped` and
    `animating_leaves_the_saved_state_alone` cover it.
 10. Run the capture tool (`tools/capture`, see Commands) for its `docs/media/<id>.png`, and add its card
-   to the README gallery (copy a neighbouring card's HTML).
-   `content::tests::readme_has_a_gallery_card_for_every_tool` checks both.
+   to the README gallery (copy a neighbouring card's HTML), and a card to the landing page
+   `web/index.html` (same, linking `app/#<id>`). `content::tests::readme_has_a_gallery_card_for_every_tool`
+   and `landing_page_links_every_tool` check them.
 
 A slider with `step_by` must also have `.clamping(egui::SliderClamping::Edits)`. Under the default
 `Always`, egui re-applies the step to the bound value on every draw. That rounded Lorenz's β = 8/3 to

@@ -342,6 +342,10 @@ wasm-bindgen --target web --no-typescript --out-dir pkg target/wasm32-unknown-un
 python3 -m http.server   # then open http://localhost:8000 (or http://localhost:8000/#lorenz)
 ```
 
+The hosted version is at <https://formula.vachagan.dev>: a landing page (`web/index.html`) with the
+workbench under `/app/`. `scripts/deploy-web.sh` builds it and publishes it to the server described
+in `deploy/zimaos/`.
+
 The example programs in `assets/content/<id>/` (the same code as the Inspector's Code tab) run on
 their own:
 

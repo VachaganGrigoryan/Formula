@@ -1,0 +1,7 @@
+:80 {
+	root * /srv
+	encode zstd gzip
+	# pkg/ file names carry no hash, so browsers revalidate them to pick up a redeploy.
+	header /app/pkg/* Cache-Control "no-cache"
+	file_server
+}

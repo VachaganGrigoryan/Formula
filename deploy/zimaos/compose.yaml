@@ -1,0 +1,16 @@
+# formula.vachagan.dev: the landing page and the wasm workbench, served as static files.
+# scripts/deploy-web.sh syncs this folder to /DATA/AppData/formula on the ZimaOS server and the
+# built site to /DATA/AppData/formula/site; the Cloudflare tunnel routes the hostname to :8190.
+services:
+  formula-web:
+    image: caddy:2.8.4-alpine
+    container_name: formula-web
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8190:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./site:/srv:ro
+    logging:
+      driver: json-file
+      options: { max-size: 10m, max-file: "3" }

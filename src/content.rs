@@ -170,4 +170,16 @@ mod tests {
         }
         assert!(missing.is_empty(), "README gallery is missing: {missing:?}");
     }
+
+    #[test]
+    fn landing_page_links_every_tool() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let page = std::fs::read_to_string(root.join("web/index.html")).unwrap();
+        let missing: Vec<_> = TOOLS
+            .iter()
+            .flat_map(|t| [format!("app/#{}\"", t.id), format!("media/{}.", t.id)])
+            .filter(|needle| !page.contains(needle.as_str()))
+            .collect();
+        assert!(missing.is_empty(), "web/index.html is missing: {missing:?}");
+    }
 }
