@@ -7,6 +7,8 @@
 //!
 //! It also embeds the example sheets, `assets/sheets/*.fwb`, as
 //! `$OUT_DIR/sheets.rs` (File > Examples).
+//!
+//! On Windows it embeds `assets/icon/formula.ico` in `formula.exe`.
 
 use std::fmt::Write as _;
 use std::path::Path;
@@ -53,6 +55,15 @@ fn main() {
     std::fs::write(dest, out).expect("write content table");
 
     write_sheets(Path::new(&out_dir));
+
+    #[cfg(windows)]
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
+        println!("cargo:rerun-if-changed=assets/icon/formula.ico");
+        winresource::WindowsResource::new()
+            .set_icon("assets/icon/formula.ico")
+            .compile_for("formula")
+            .expect("embed the Windows icon");
+    }
 }
 
 /// `SHEETS`: (file name, text) for each example sheet, sorted by name.

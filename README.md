@@ -322,7 +322,12 @@ work the same way (`theme dark`, `tab docs`, `grid false`).
 
 ## Run
 
-Native:
+Download the desktop app for macOS (universal), Windows or Linux (x86_64) from the
+[latest release](https://github.com/VachaganGrigoryan/Formula/releases/latest). The macOS app is not
+notarized: the first time, right-click `Formula.app` and choose Open (or run
+`xattr -dr com.apple.quarantine Formula.app`). On Linux it needs ALSA (`libasound2`) for sound.
+
+Native, from source:
 
 ```sh
 cargo run --release

@@ -29,6 +29,12 @@ wasm-bindgen --target web --no-typescript --out-dir pkg target/wasm32-unknown-un
 python3 -m http.server   # index.html loads ./pkg/formula.js; open http://localhost:8000/#<tool-id>
 ```
 
+Desktop release: bump `version` in Cargo.toml, commit, then `git tag vX.Y.Z && git push origin vX.Y.Z`.
+`.github/workflows/release.yml` checks the tag matches, runs `scripts/package-release.sh` on Linux,
+Windows and macOS (universal `Formula.app`) and publishes a GitHub release. The icon is
+`assets/icon/formula.svg` (the landing page logo); `formula.png`/`.ico` are rendered from it and
+feed `app_icon()`, the Windows exe (`build.rs`), the `.icns` and the inline favicons.
+
 `scripts/deploy-web.sh` publishes https://formula.vachagan.dev (ZimaOS, Caddy in `deploy/zimaos/`):
 `web/index.html` (landing) at `/`, `docs/media` at `/media/`, the app shell and `pkg/` at `/app/`.
 
