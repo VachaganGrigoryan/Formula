@@ -6,7 +6,8 @@ fn main() -> eframe::Result {
         viewport: egui::ViewportBuilder::default()
             .with_title("Formula")
             .with_inner_size([1440.0, 900.0])
-            .with_min_inner_size([360.0, 480.0]),
+            .with_min_inner_size([360.0, 480.0])
+            .with_icon(formula::app_icon()),
         ..Default::default()
     };
     eframe::run_native(

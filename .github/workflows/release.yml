@@ -1,0 +1,80 @@
+# Pushing a tag vX.Y.Z (matching `version` in Cargo.toml) builds the desktop app for Linux, Windows
+# and macOS and publishes them as a GitHub release. Pull requests that touch the packaging, and
+# manual runs, only build (the files are kept as workflow artifacts).
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - scripts/package-release.sh
+      - build.rs
+      - assets/icon/**
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04 # older glibc, so the binary runs on more distros
+            name: linux-x86_64
+          - os: windows-latest
+            name: windows-x86_64
+          - os: macos-latest
+            name: macos-universal
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check the tag matches Cargo.toml
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match Cargo.toml version $version"
+            exit 1
+          fi
+
+      - name: Install ALSA headers
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+
+      - name: Test
+        if: runner.os == 'Linux'
+        run: cargo test --release --features native-audio
+
+      - name: Build and package
+        run: scripts/package-release.sh
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: formula-${{ matrix.name }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Formula $GITHUB_REF_NAME" \
+            --generate-notes
